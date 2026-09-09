@@ -40,14 +40,6 @@ if [ ! -d "$APP" ]; then
     exit 1
 fi
 
-# Patches folder (opsional)
-PATCH_DIR="$APP/Patches"
-mkdir -p "$PATCH_DIR"
-for package in "$APP"/*.3105; do
-    [ -e "$package" ] || continue
-    mv "$package" "$PATCH_DIR/"
-done
-
 mkdir -p "$BUILD_DIR/Payload"
 cp -R "$APP" "$BUILD_DIR/Payload/"
 
