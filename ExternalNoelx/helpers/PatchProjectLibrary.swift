@@ -53,9 +53,6 @@ enum PatchProjectLibrary {
             return
         }
 
-        // Xcode may flatten folder references into the app bundle. Resolve both
-        // the intended Patches subdirectory and the flattened bundle root so
-        // standalone builds remain self-contained across packaging layouts.
         let nestedURLs = bundle.urls(forResourcesWithExtension: "noelx", subdirectory: "Patches") ?? []
         let flattenedURLs = bundle.urls(forResourcesWithExtension: "noelx", subdirectory: nil) ?? []
         var seen = Set<String>()
@@ -91,8 +88,6 @@ enum PatchProjectLibrary {
                 if let contentKey = try PatchKeyStore.load(for: summary) {
                     decoded = try PatchPackageCodec.decode(data, contentKey: contentKey)
                 } else if summary.isPasswordProtected {
-                    // Only the app's renamed bundled resources use the internal
-                    // key; imported packages remain locked for the user.
                     guard url.deletingPathExtension().lastPathComponent.hasPrefix("Noelx File (") else {
                         decoded = nil
                         continue
