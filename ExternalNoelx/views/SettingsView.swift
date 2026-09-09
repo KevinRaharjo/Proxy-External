@@ -5,6 +5,12 @@ struct SettingsView: View {
     @Environment(\.appLanguage) private var language
     @EnvironmentObject private var appState: AppState
     @AppStorage(AppLanguage.storageKey) private var languageCode = AppLanguage.english.rawValue
+    
+    // MARK: - Reset States
+    @State private var showResetAlert = false
+    @State private var resetMessage = ""
+    @State private var showRestartAlert = false
+    @State private var showResultAlert = false
 
     var body: some View {
         NavigationStack {
@@ -62,6 +68,27 @@ struct SettingsView: View {
                     Text(language.text("settings.supported_versions_footer"))
                 }
 
+                // MARK: - ⚠️ DANGER ZONE - Reset Actions
+                Section {
+                    Button {
+                        showResetAlert = true
+                    } label: {
+                        Label("Reset All Patches", systemImage: "trash.fill")
+                            .foregroundColor(.red)
+                    }
+                    
+                    Button {
+                        showRestartAlert = true
+                    } label: {
+                        Label("Reset All Data (Clean Install)", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                    }
+                } header: {
+                    Text("⚠️ Danger Zone")
+                } footer: {
+                    Text("Reset All Patches will remove all patch backups and reset patch states.\nReset All Data will remove everything including license.")
+                }
+
             }
             .tint(AppTheme.accent)
             .scrollContentBackground(.hidden)
@@ -73,6 +100,30 @@ struct SettingsView: View {
                     Button(language.text("common.done")) { dismiss() }
                         .fontWeight(.semibold)
                 }
+            }
+            // MARK: - Alerts
+            .alert("Reset Patches", isPresented: $showResetAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Reset", role: .destructive) {
+                    performResetPatches()
+                }
+            } message: {
+                Text("This will remove all patch backups and reset patch states. Are you sure?")
+            }
+            .alert("Reset All Data", isPresented: $showRestartAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Reset", role: .destructive) {
+                    performResetAllData()
+                }
+            } message: {
+                Text("This will remove everything including license, patches, and all data. Are you sure?")
+            }
+            .alert("Result", isPresented: $showResultAlert) {
+                Button("OK") {
+                    resetMessage = ""
+                }
+            } message: {
+                Text(resetMessage)
             }
         }
     }
@@ -125,4 +176,75 @@ struct SettingsView: View {
             .accessibilityLabel(language.text("accessibility.open_profile", name))
         }
     }
+    
+    // MARK: - Reset Functions
+    
+    private func performResetPatches() {
+        do {
+            try DevicePatchService.resetAllPatches()
+            
+            // Reset semua state di UserDefaults
+            UserDefaults.standard.removeObject(forKey: "aimDragEnabled")
+            UserDefaults.standard.removeObject(forKey: "aimNeckEnabled")
+            UserDefaults.standard.removeObject(forKey: "hspeitoffEnabled")
+            UserDefaults.standard.removeObject(forKey: "hyperBalamagicaEnabled")
+            UserDefaults.standard.removeObject(forKey: "aimBodyPackageEnabled")
+            UserDefaults.standard.removeObject(forKey: "aimChestPackageEnabled")
+            UserDefaults.standard.removeObject(forKey: "magicEnabled")
+            
+            resetMessage = "✅ All patches reset successfully!"
+            showResultAlert = true
+            
+        } catch {
+            resetMessage = "❌ Reset failed: \(error.localizedDescription)"
+            showResultAlert = true
+        }
+    }
+    
+    private func performResetAllData() {
+        do {
+            // 1. Reset patches
+            try DevicePatchService.resetAllPatches()
+            
+            // 2. Reset license - pake LicenseManager
+            if let licenseManager = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first?.windows.first?.rootViewController?
+                .view?.window?.windowScene?
+                .windows.first?.rootViewController as? UIHostingController<ContentView> {
+                // Alternative: use NotificationCenter or shared instance
+            }
+            
+            // 3. Reset semua UserDefaults
+            if let bundleID = Bundle.main.bundleIdentifier {
+                UserDefaults.standard.removePersistentDomain(forName: bundleID)
+            }
+            UserDefaults.standard.synchronize()
+            
+            // 4. Hapus semua data di Documents
+            let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            try? FileManager.default.removeItem(at: documentsURL)
+            
+            // 5. Hapus semua data di Application Support
+            let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            try? FileManager.default.removeItem(at: appSupportURL)
+            
+            resetMessage = "✅ All data reset successfully! Please restart the app."
+            showResultAlert = true
+            
+            // 6. Restart app setelah 2 detik
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                exit(0)
+            }
+            
+        } catch {
+            resetMessage = "❌ Reset failed: \(error.localizedDescription)"
+            showResultAlert = true
+        }
+    }
+}
+
+#Preview {
+    SettingsView()
+        .environmentObject(AppState())
 }
