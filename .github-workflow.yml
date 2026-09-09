@@ -1,0 +1,18 @@
+name: Build External Noelx key-enabled IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with: { xcode-version: latest-stable }
+      - run: ./build_unsigned.sh
+      - run: ./build_esign_ready_ipa.sh build/External-Noelx-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: External-Noelx-unsigned-ipa
+          path: build/External-Noelx-unsigned.ipa
