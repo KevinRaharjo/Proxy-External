@@ -53,8 +53,9 @@ enum PatchProjectLibrary {
             return
         }
 
-        let nestedURLs = bundle.urls(forResourcesWithExtension: "noelx", subdirectory: "Patches") ?? []
-        let flattenedURLs = bundle.urls(forResourcesWithExtension: "noelx", subdirectory: nil) ?? []
+        // Cari file .3105 di bundle
+        let nestedURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: "Patches") ?? []
+        let flattenedURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: nil) ?? []
         var seen = Set<String>()
         let bundledURLs = (nestedURLs + flattenedURLs).filter { seen.insert($0.standardizedFileURL.path).inserted }
 
@@ -80,7 +81,7 @@ enum PatchProjectLibrary {
               ) else { return [] }
 
         var byID: [UUID: PatchLibraryItem] = [:]
-        for url in urls where url.pathExtension.lowercased() == "noelx" {
+        for url in urls where url.pathExtension.lowercased() == "noelx" || url.pathExtension.lowercased() == "3105" {
             do {
                 let data = try readPackage(at: url)
                 let summary = try PatchPackageCodec.inspect(data)
