@@ -10,7 +10,7 @@ struct PatchLibraryItem: Identifiable {
     var isLocked: Bool { project == nil }
     var displayName: String {
         let filename = packageURL.deletingPathExtension().lastPathComponent
-        if filename.hasPrefix("Noelx File (") {
+        if filename.hasPrefix("Noexk File (") {
             return filename
         }
         return project?.name ?? filename
@@ -88,7 +88,7 @@ enum PatchProjectLibrary {
                 if let contentKey = try PatchKeyStore.load(for: summary) {
                     decoded = try PatchPackageCodec.decode(data, contentKey: contentKey)
                 } else if summary.isPasswordProtected {
-                    guard url.deletingPathExtension().lastPathComponent.hasPrefix("Noelx File (") else {
+                    guard url.deletingPathExtension().lastPathComponent.hasPrefix("Noexk File (") else {
                         decoded = nil
                         continue
                     }
