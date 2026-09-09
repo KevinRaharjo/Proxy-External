@@ -108,13 +108,13 @@ struct ContentView: View {
             }
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                patchCard(name: "Aim Drag", target: "FREE FIRE • NORMAL", package: "Noelx File (6).3105", color: AppTheme.accent, state: $aimDragEnabled)
-                patchCard(name: "Aim Neck", target: "FREE FIRE • NORMAL", package: "Noelx File (7).3105", color: AppTheme.secondaryAccent, state: $aimNeckEnabled)
-                patchCard(name: "Antenna", target: "FREE FIRE • NORMAL", package: "Noelx File (8).3105", color: AppTheme.secondaryAccent, state: $hspeitoffEnabled)
-                patchCard(name: "144 FPS", target: "FREE FIRE • NORMAL", package: "Noelx File (10).3105", color: AppTheme.secondaryAccent, state: $hyperBalamagicaEnabled)
-                patchCard(name: "Aim Body", target: "FREE FIRE • NORMAL", package: "Noelx File (12).3105", color: AppTheme.accent, state: $aimBodyPackageEnabled)
-                patchCard(name: "Aim Chest", target: "FREE FIRE • NORMAL", package: "Noelx File (2).3105", color: AppTheme.secondaryAccent, state: $aimChestPackageEnabled)
-                patchCard(name: "Magic", target: "FREE FIRE • NORMAL", package: "Noelx File (14).3105", color: AppTheme.accent, state: $magicEnabled)
+                patchCard(name: "Aim Drag", target: "FREE FIRE • NORMAL", package: "Noexk File (6).3105", color: AppTheme.accent, state: $aimDragEnabled)
+                patchCard(name: "Aim Neck", target: "FREE FIRE • NORMAL", package: "Noexk File (7).3105", color: AppTheme.secondaryAccent, state: $aimNeckEnabled)
+                patchCard(name: "Antenna", target: "FREE FIRE • NORMAL", package: "Noexk File (8).3105", color: AppTheme.secondaryAccent, state: $hspeitoffEnabled)
+                patchCard(name: "144 FPS", target: "FREE FIRE • NORMAL", package: "Noexk File (10).3105", color: AppTheme.secondaryAccent, state: $hyperBalamagicaEnabled)
+                patchCard(name: "Aim Body", target: "FREE FIRE • NORMAL", package: "Noexk File (12).3105", color: AppTheme.accent, state: $aimBodyPackageEnabled)
+                patchCard(name: "Aim Chest", target: "FREE FIRE • NORMAL", package: "Noexk File (2).3105", color: AppTheme.secondaryAccent, state: $aimChestPackageEnabled)
+                patchCard(name: "Magic", target: "FREE FIRE • NORMAL", package: "Noexk File (14).3105", color: AppTheme.accent, state: $magicEnabled)
             }
 
             HStack(spacing: 8) {
@@ -272,13 +272,13 @@ struct ContentView: View {
     }
 
     private func syncPatchStates() {
-        aimDragEnabled = isPatchActive("Noelx File (6).3105")
-        aimNeckEnabled = isPatchActive("Noelx File (7).3105")
-        hspeitoffEnabled = isPatchActive("Noelx File (8).3105")
-        hyperBalamagicaEnabled = isPatchActive("Noelx File (10).3105")
-        aimBodyPackageEnabled = isPatchActive("Noelx File (12).3105")
-        aimChestPackageEnabled = isPatchActive("Noelx File (2).3105")
-        magicEnabled = isPatchActive("Noelx File (14).3105")
+        aimDragEnabled = isPatchActive("Noexk File (6).3105")
+        aimNeckEnabled = isPatchActive("Noexk File (7).3105")
+        hspeitoffEnabled = isPatchActive("Noexk File (8).3105")
+        hyperBalamagicaEnabled = isPatchActive("Noexk File (10).3105")
+        aimBodyPackageEnabled = isPatchActive("Noexk File (12).3105")
+        aimChestPackageEnabled = isPatchActive("Noexk File (2).3105")
+        magicEnabled = isPatchActive("Noexk File (14).3105")
     }
 
     private func isPatchActive(_ packageFilename: String) -> Bool {
@@ -294,13 +294,13 @@ struct ContentView: View {
 
     private func setPatchState(for packageFilename: String, enabled: Bool) {
         switch packageFilename {
-        case "Noelx File (6).3105": aimDragEnabled = enabled
-        case "Noelx File (7).3105": aimNeckEnabled = enabled
-        case "Noelx File (8).3105": hspeitoffEnabled = enabled
-        case "Noelx File (10).3105": hyperBalamagicaEnabled = enabled
-        case "Noelx File (12).3105": aimBodyPackageEnabled = enabled
-        case "Noelx File (2).3105": aimChestPackageEnabled = enabled
-        case "Noelx File (14).3105": magicEnabled = enabled
+        case "Noexk File (6).3105": aimDragEnabled = enabled
+        case "Noexk File (7).3105": aimNeckEnabled = enabled
+        case "Noexk File (8).3105": hspeitoffEnabled = enabled
+        case "Noexk File (10).3105": hyperBalamagicaEnabled = enabled
+        case "Noexk File (12).3105": aimBodyPackageEnabled = enabled
+        case "Noexk File (2).3105": aimChestPackageEnabled = enabled
+        case "Noexk File (14).3105": magicEnabled = enabled
         default: break
         }
     }
