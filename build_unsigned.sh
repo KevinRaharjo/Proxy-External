@@ -13,7 +13,7 @@ command -v xcodebuild >/dev/null || { echo 'xcodebuild not found' >&2; exit 127;
 
 # Cek dulu apakah project & scheme tersedia
 echo "=== Checking Xcode project ==="
-xcodebuild -list -project "$ROOT/ExternalNoelx.xcodeproj" || {
+xcodebuild -list -project "$ROOT/ExternalNoxel.xcodeproj" || {
     echo "❌ Project not found or invalid" >&2
     exit 1
 }
