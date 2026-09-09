@@ -1,256 +1,186 @@
+// ✅ BENAR - DevicePatchService.swift
 import Foundation
 
-struct PatchLibraryItem: Identifiable {
-    let summary: PatchPackageSummary
-    var project: PatchProject?
-    var contentKey: Data?
-    var packageURL: URL
-
-    var id: UUID { summary.packageID }
-    var isLocked: Bool { project == nil }
-    var displayName: String {
-        let filename = packageURL.deletingPathExtension().lastPathComponent
-        if filename.hasPrefix("Noexk File (") {
-            return filename
+enum DevicePatchService {
+    private static let fileManager = FileManager.default
+    
+    // MARK: - Backup & Restore
+    
+    static func backupOriginalFile(at path: String) throws -> URL {
+        let backupRoot = try PatchProjectLibrary.backupRootURL()
+        let backupDir = backupRoot.appendingPathComponent("originals", isDirectory: true)
+        try fileManager.createDirectory(at: backupDir, withIntermediateDirectories: true)
+        
+        let fileName = (path as NSString).lastPathComponent
+        let backupPath = backupDir.appendingPathComponent("\(fileName).backup")
+        
+        if fileManager.fileExists(atPath: path) {
+            if fileManager.fileExists(atPath: backupPath.path) {
+                try fileManager.removeItem(at: backupPath)
+            }
+            try fileManager.copyItem(atPath: path, toPath: backupPath.path)
+            print("✅ Backup created: \(backupPath.path)")
         }
-        return project?.name ?? filename
+        return backupPath
     }
-    var workspaceURL: URL? {
-        PatchWorkspaceService.workspaceURL(projectID: id)
-    }
-}
-
-struct PatchPasswordRequest: Identifiable {
-    let summary: PatchPackageSummary
-    var id: UUID { summary.packageID }
-}
-
-enum PatchProjectLibrary {
-    static func packageRootURL(fileManager: FileManager = .default) throws -> URL {
-        let base = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let root = base.appendingPathComponent("PatchProjects", isDirectory: true)
-        try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-        return root
-    }
-
-    static func backupRootURL(fileManager: FileManager = .default) throws -> URL {
-        let root = try packageRootURL(fileManager: fileManager)
-            .appendingPathComponent("Backups", isDirectory: true)
-        try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
-        return root
-    }
-
-    static func installBundledPackagesIfNeeded(
-        bundle: Bundle = .main,
-        fileManager: FileManager = .default
-    ) {
-        guard let root = try? packageRootURL(fileManager: fileManager) else {
+    
+    static func restoreOriginalFile(from backupPath: URL, to targetPath: String) throws {
+        guard fileManager.fileExists(atPath: backupPath.path) else {
+            print("⚠️ Backup file not found: \(backupPath.path)")
             return
         }
-
-        // Cari file .3105 di bundle
-        let nestedURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: "Patches") ?? []
-        let flattenedURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: nil) ?? []
-        var seen = Set<String>()
-        let bundledURLs = (nestedURLs + flattenedURLs).filter { seen.insert($0.standardizedFileURL.path).inserted }
-
-        for sourceURL in bundledURLs {
-            let destinationURL = root.appendingPathComponent(sourceURL.lastPathComponent)
-            guard !fileManager.fileExists(atPath: destinationURL.path) else { continue }
-            do {
-                let data = try Data(contentsOf: sourceURL, options: .mappedIfSafe)
-                _ = try PatchPackageCodec.inspect(data)
-                try data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
-            } catch {
-                log("patch: skipped bundled package \(sourceURL.lastPathComponent): \(error)")
-            }
+        
+        if fileManager.fileExists(atPath: targetPath) {
+            try fileManager.removeItem(atPath: targetPath)
         }
+        
+        try fileManager.copyItem(atPath: backupPath.path, toPath: targetPath)
+        print("✅ Restored: \(targetPath)")
     }
-
-    static func load(fileManager: FileManager = .default) -> [PatchLibraryItem] {
-        guard let root = try? packageRootURL(fileManager: fileManager),
-              let urls = try? fileManager.contentsOfDirectory(
-                at: root,
-                includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
-                options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
-              ) else { return [] }
-
-        var byID: [UUID: PatchLibraryItem] = [:]
-        for url in urls where url.pathExtension.lowercased() == "noelx" || url.pathExtension.lowercased() == "3105" {
-            do {
-                let data = try readPackage(at: url)
-                let summary = try PatchPackageCodec.inspect(data)
-                let decoded: DecodedPatchPackage?
-                if let contentKey = try PatchKeyStore.load(for: summary) {
-                    decoded = try PatchPackageCodec.decode(data, contentKey: contentKey)
-                } else if summary.isPasswordProtected {
-                    guard url.deletingPathExtension().lastPathComponent.hasPrefix("Noexk File (") else {
-                        decoded = nil
-                        continue
-                    }
-                    do {
-                        let bundled = try PatchPackageCodec.decode(
-                            data,
-                            password: PatchPackageCodec.bundledResourcePassword
-                        )
-                        try PatchKeyStore.store(bundled.contentKey, for: summary)
-                        decoded = bundled
-                    } catch {
-                        decoded = nil
-                    }
-                } else {
-                    decoded = try PatchPackageCodec.decode(data, password: nil)
+    
+    static func restoreOriginalFile(for projectID: UUID, filePath: String) throws {
+        let backupRoot = try PatchProjectLibrary.backupRootURL()
+        let backupDir = backupRoot.appendingPathComponent("originals", isDirectory: true)
+        let fileName = (filePath as NSString).lastPathComponent
+        let backupPath = backupDir.appendingPathComponent("\(fileName).backup")
+        
+        try restoreOriginalFile(from: backupPath, to: filePath)
+    }
+    
+    // MARK: - Apply Patch dengan Backup
+    
+    static func apply(project: PatchProject) throws -> PatchTransactionReceipt {
+        let bundleIDs = orderedBundleIdentifiers(in: project)
+        
+        return try withResolvedContainers(bundleIDs: bundleIDs) { roots in
+            // Backup semua file yang akan di-patch
+            for rule in project.rules {
+                guard let root = roots[rule.bundleID] else { continue }
+                let targetPath = root.appendingPathComponent(rule.relativePath).path
+                
+                if fileManager.fileExists(atPath: targetPath) {
+                    try backupOriginalFile(at: targetPath)
                 }
-                let item = PatchLibraryItem(
-                    summary: summary,
-                    project: decoded?.project,
-                    contentKey: decoded?.contentKey,
-                    packageURL: url
-                )
-                if summary.schemaVersion >= 2, let project = decoded?.project {
-                    do {
-                        _ = try PatchWorkspaceService.ensureWorkspace(for: project)
-                    } catch {
-                        log("patch: workspace unavailable for \(project.id.uuidString)")
+            }
+            
+            // Apply patch
+            let receipt = try PatchTransaction.apply(
+                project: project,
+                backupRoot: try PatchProjectLibrary.backupRootURL(),
+                containerResolver: { bundleID in
+                    guard let root = roots[bundleID] else {
+                        throw PatchPackageError.targetAppUnavailable(bundleID)
                     }
+                    return root
                 }
-                byID[summary.packageID] = item
-            } catch {
-                log("patch: skipped invalid local package \(url.lastPathComponent)")
-            }
-        }
-        return byID.values.sorted {
-            ($0.project?.updatedAt ?? .distantPast) > ($1.project?.updatedAt ?? .distantPast)
-        }
-    }
-
-    static func readPackage(at url: URL) throws -> Data {
-        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey])
-        guard values.isDirectory != true,
-              values.isSymbolicLink != true,
-              values.isRegularFile == true else {
-            throw PatchPackageError.invalidProject
-        }
-        return try Data(contentsOf: url, options: .mappedIfSafe)
-    }
-
-    static func save(
-        data: Data,
-        projectName: String,
-        existingURL: URL? = nil,
-        fileManager: FileManager = .default
-    ) throws -> URL {
-        let destination: URL
-        if let existingURL {
-            destination = existingURL
-        } else {
-            let root = try packageRootURL(fileManager: fileManager)
-            let baseName = sanitizedFilename(projectName)
-            var candidate = root.appendingPathComponent(baseName).appendingPathExtension("noelx")
-            var suffix = 2
-            while fileManager.fileExists(atPath: candidate.path) {
-                candidate = root.appendingPathComponent("\(baseName)-\(suffix)").appendingPathExtension("noelx")
-                suffix += 1
-            }
-            destination = candidate
-        }
-        try data.write(to: destination, options: [.atomic, .completeFileProtection])
-        return destination
-    }
-
-    static func installImportedPackage(
-        data: Data,
-        decoded: DecodedPatchPackage,
-        summary: PatchPackageSummary,
-        existingURL: URL?,
-        fileManager: FileManager = .default
-    ) throws {
-        let previousData = try existingURL.map { try readPackage(at: $0) }
-        var savedURL: URL?
-        do {
-            savedURL = try save(
-                data: data,
-                projectName: decoded.project.name,
-                existingURL: existingURL,
-                fileManager: fileManager
             )
-            if summary.schemaVersion >= 2 {
-                _ = try PatchWorkspaceService.replaceWorkspace(
-                    with: decoded.project,
-                    fileManager: fileManager
-                )
-            } else {
-                try? PatchWorkspaceService.deleteWorkspace(
-                    projectID: decoded.project.id,
-                    fileManager: fileManager
-                )
+            
+            // Simpan receipt untuk restore nanti
+            saveReceipt(receipt)
+            return receipt
+        }
+    }
+    
+    // MARK: - Restore Patch (Otomatis)
+    
+    static func restore(receipt: PatchTransactionReceipt) throws {
+        // Restore original files
+        let bundleIDs = try PatchTransaction.requiredBundleIdentifiers(for: receipt)
+        try withResolvedContainers(bundleIDs: bundleIDs) { roots in
+            // Coba restore dari backup
+            for (bundleID, root) in roots {
+                let backupRoot = try PatchProjectLibrary.backupRootURL()
+                let backupDir = backupRoot.appendingPathComponent("originals", isDirectory: true)
+                let backupFiles = try fileManager.contentsOfDirectory(at: backupDir, includingPropertiesForKeys: nil)
+                
+                for backupFile in backupFiles {
+                    let fileName = backupFile.deletingPathExtension().lastPathComponent
+                    let targetPath = root.appendingPathComponent(fileName).path
+                    
+                    if fileManager.fileExists(atPath: targetPath) {
+                        try restoreOriginalFile(from: backupFile, to: targetPath)
+                    }
+                }
             }
-        } catch {
-            if let previousData, let existingURL {
-                try? previousData.write(
-                    to: existingURL,
-                    options: [.atomic, .completeFileProtection]
-                )
-            } else if let savedURL, fileManager.fileExists(atPath: savedURL.path) {
-                try? fileManager.removeItem(at: savedURL)
+            
+            // Hapus backup setelah restore
+            let backupRoot = try PatchProjectLibrary.backupRootURL()
+            let backupDir = backupRoot.appendingPathComponent("originals", isDirectory: true)
+            try? fileManager.removeItem(at: backupDir)
+            
+            // Hapus receipt
+            removeReceipt(projectID: receipt.projectID)
+        }
+        
+        // Juga jalankan PatchTransaction.restore
+        try PatchTransaction.restore(
+            receipt: receipt,
+            containerResolver: { bundleID in
+                guard let root = roots[bundleID] else {
+                    throw PatchPackageError.targetAppUnavailable(bundleID)
+                }
+                return root
             }
-            throw error
+        )
+    }
+    
+    // MARK: - Reset All Patches (Bersihin semua)
+    
+    static func resetAllPatches() throws {
+        // Hapus semua backup
+        let backupRoot = try PatchProjectLibrary.backupRootURL()
+        let backupDir = backupRoot.appendingPathComponent("originals", isDirectory: true)
+        try? fileManager.removeItem(at: backupDir)
+        
+        // Hapus semua receipt
+        let receipts = try fileManager.contentsOfDirectory(at: backupRoot, includingPropertiesForKeys: nil)
+        for receipt in receipts {
+            try? fileManager.removeItem(at: receipt)
+        }
+        
+        print("✅ All patches reset")
+    }
+    
+    // MARK: - Receipt Management
+    
+    private static func saveReceipt(_ receipt: PatchTransactionReceipt) {
+        let key = "receipt_\(receipt.projectID.uuidString)"
+        if let data = try? JSONEncoder().encode(receipt) {
+            UserDefaults.standard.set(data, forKey: key)
         }
     }
-
-    static func delete(_ item: PatchLibraryItem, fileManager: FileManager = .default) throws {
-        if fileManager.fileExists(atPath: item.packageURL.path) {
-            try fileManager.removeItem(at: item.packageURL)
-        }
-        try? PatchWorkspaceService.deleteWorkspace(projectID: item.id, fileManager: fileManager)
-        try? PatchKeyStore.delete(for: item.summary)
+    
+    static func latestReceipt(projectID: UUID) -> PatchTransactionReceipt? {
+        let key = "receipt_\(projectID.uuidString)"
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(PatchTransactionReceipt.self, from: data)
     }
-
-    static func synchronizeWorkspace(
-        item: PatchLibraryItem,
-        fileManager: FileManager = .default
-    ) throws -> PatchProject {
-        guard item.summary.schemaVersion >= 2,
-              let baseProject = item.project,
-              let contentKey = item.contentKey else {
-            throw PatchPackageError.invalidProject
-        }
-        let workspace = try PatchWorkspaceService.ensureWorkspace(
-            for: baseProject,
-            fileManager: fileManager
-        )
-        let project = try PatchWorkspaceService.snapshot(
-            baseProject: baseProject,
-            workspaceURL: workspace,
-            fileManager: fileManager
-        )
-        let original = try readPackage(at: item.packageURL)
-        let updated = try PatchPackageCodec.update(
-            original,
-            project: project,
-            contentKey: contentKey,
-            schemaVersion: PatchPackageCodec.latestSchemaVersion
-        )
-        _ = try save(
-            data: updated,
-            projectName: project.name,
-            existingURL: item.packageURL,
-            fileManager: fileManager
-        )
-        return project
+    
+    static func removeReceipt(projectID: UUID) {
+        let key = "receipt_\(projectID.uuidString)"
+        UserDefaults.standard.removeObject(forKey: key)
     }
-
-    private static func sanitizedFilename(_ rawName: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_ "))
-        let scalars = rawName.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "-" }
-        let result = String(scalars)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .prefix(80)
-        return result.isEmpty ? "Patch" : String(result)
+    
+    private static func orderedBundleIdentifiers(in project: PatchProject) -> [String] {
+        project.allBundleIdentifiers
+    }
+    
+    private static func withResolvedContainers<T>(
+        bundleIDs: [String],
+        operation: ([String: URL]) throws -> T
+    ) throws -> T {
+        var roots: [String: URL] = [:]
+        
+        for bundleID in bundleIDs {
+            guard let path = ContainerStore.resolveAppContainerPath(bundleID: bundleID),
+                  ContainerStore.isApplicationContainerPath(path) else {
+                throw PatchPackageError.targetAppUnavailable(bundleID)
+            }
+            roots[bundleID] = PatchPathValidator.canonicalFileURL(URL(fileURLWithPath: path, isDirectory: true))
+        }
+        return try operation(roots)
     }
 }
+
+// MARK: - Receipt Codable
+extension PatchTransactionReceipt: Codable {}
