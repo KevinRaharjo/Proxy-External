@@ -17,6 +17,8 @@ struct ContentView: View {
     @State private var aimBodyPackageEnabled = false
     @State private var aimChestPackageEnabled = false
     @State private var magicEnabled = false
+    @State private var showAlert = false
+    @State private var alertMessage = ""
 
     var body: some View {
         ZStack {
@@ -52,6 +54,13 @@ struct ContentView: View {
             guard phase == .active, !patchOperationBusy else { return }
             syncPatchStates()
             patchMessage = "READY — SELECT A PATCH"
+        }
+        .alert(isPresented: $showAlert) {
+            Alert(
+                title: Text("Patch Status"),
+                message: Text(alertMessage),
+                dismissButton: .default(Text("OK"))
+            )
         }
     }
 
@@ -323,6 +332,7 @@ struct ContentView: View {
             let result: PatchActionResult
             do {
                 if wasEnabled {
+                    // 🔥 RESTORE - Matiin patch
                     guard let receipt = DevicePatchService.latestReceipt(projectID: projectID) else {
                         result = .unavailable("NO ACTIVE RECEIPT — NOTHING TO RESTORE")
                         DispatchQueue.main.async {
@@ -335,6 +345,7 @@ struct ContentView: View {
                     try DevicePatchService.restore(receipt: receipt)
                     result = .restored
                 } else {
+                    // 🚀 APPLY - Nyalain patch
                     guard let project else {
                         result = .unavailable("PASSWORD REQUIRED — UNLOCK PACKAGE")
                         DispatchQueue.main.async {
@@ -355,14 +366,16 @@ struct ContentView: View {
                 switch result {
                 case .applied:
                     self.setPatchState(for: packageFilename, enabled: true)
-                    self.patchMessage = "Inject Successful — \(packageFilename)"
+                    self.patchMessage = "✅ Patch Applied — \(packageFilename)"
                     PatchAudioFeedback.bypassActivated()
                 case .restored:
                     self.setPatchState(for: packageFilename, enabled: false)
-                    self.patchMessage = "Restore Successful — \(packageFilename)"
+                    self.patchMessage = "✅ Restored — \(packageFilename)"
                     PatchAudioFeedback.originalRestored()
                 case .unavailable(let message):
-                    self.patchMessage = message
+                    self.patchMessage = "❌ \(message)"
+                    self.alertMessage = message
+                    self.showAlert = true
                 }
                 self.patchOperationBusy = false
             }
