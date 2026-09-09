@@ -17,16 +17,16 @@ jobs:
       - name: Make script executable
         run: chmod +x build_unsigned.sh
       - name: Build IPA
-        run: ./build_unsigned.sh 2>&1 | tee build.log
+        run: ./build_unsigned.sh
+      - name: List build directory (debug)
+        run: ls -la build/
       - name: Upload IPA artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Unsigned-IPA
-          path: build/*.ipa
-      - name: Upload build log (if failed)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Build-Log
-          path: build.log
+          # Coba cari semua kemungkinan nama file IPA
+          path: |
+            build/*.ipa
+            build/External-Noelx-unsigned.ipa
+            build/ExternalNoelx-unsigned.ipa
