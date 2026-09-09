@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import Security
 
 @MainActor
 final class LicenseManager: ObservableObject {
@@ -13,18 +12,19 @@ final class LicenseManager: ObservableObject {
     @Published private(set) var contactOwner: String?
     @Published var rememberKey = true
 
-    private let service = "com.noelx.external-ios.activation"
-    private let keyAccount = "license-key"
+    private let userDefaultsKey = "com.noelx.external-ios.license_key"
     private var lastAttemptAt: Date?
 
     init() {
-        isActive = hasRememberedKey
+        isActive = hasSavedKey
     }
 
-    var hasRememberedKey: Bool { string(for: keyAccount) == Self.accessKey }
+    var hasSavedKey: Bool {
+        UserDefaults.standard.string(forKey: userDefaultsKey) == Self.accessKey
+    }
 
     func beginLaunchSession() {
-        isActive = hasRememberedKey
+        isActive = hasSavedKey
         message = isActive ? "Ready to use" : "Key required — enter your access key"
     }
 
@@ -47,58 +47,33 @@ final class LicenseManager: ObservableObject {
                 self.message = "Invalid access key"
                 return
             }
-            if self.rememberKey { self.save(Self.accessKey, for: self.keyAccount) }
+            if self.rememberKey {
+                UserDefaults.standard.set(Self.accessKey, forKey: self.userDefaultsKey)
+            }
             self.isActive = true
             self.message = "Activated successfully"
         }
     }
 
-    func rememberedKey() -> String? { string(for: keyAccount) }
+    func rememberedKey() -> String? {
+        UserDefaults.standard.string(forKey: userDefaultsKey)
+    }
 
     func refresh() {
-        isActive = hasRememberedKey
+        isActive = hasSavedKey
         message = isActive ? "Ready to use" : "Key required — enter your access key"
     }
 
     func deactivate() {
-        delete(keyAccount)
+        UserDefaults.standard.removeObject(forKey: userDefaultsKey)
         isActive = false
         message = "Activation removed from this device"
     }
-
-    private func string(for account: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    private func save(_ value: String, for account: String) {
-        let base: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
-        SecItemDelete(base as CFDictionary)
-        var item = base
-        item[kSecValueData as String] = Data(value.utf8)
-        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(item as CFDictionary, nil)
-    }
-
-    private func delete(_ account: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
-        SecItemDelete(query as CFDictionary)
+    
+    // Reset license - panggil ini kalo mau reset manual
+    func resetLicense() {
+        UserDefaults.standard.removeObject(forKey: userDefaultsKey)
+        isActive = false
+        message = "License reset successfully"
     }
 }
