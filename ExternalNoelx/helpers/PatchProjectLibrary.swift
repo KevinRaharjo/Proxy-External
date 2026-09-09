@@ -1,188 +1,260 @@
-//
-//  PatchProjectLibrary.swift
-//  ExternalNoelx
-//
-//  Created by User on 22/03/25.
-//
-
 import Foundation
-import SwiftUI
 
 struct PatchLibraryItem: Identifiable {
-    let id = UUID()
-    let name: String
-    let url: URL
-    let project: PatchProject?
-    let isImported: Bool
-    
+    let summary: PatchPackageSummary
+    var project: PatchProject?
+    var contentKey: Data?
+    var packageURL: URL
+
+    var id: UUID { summary.packageID }
+    var isLocked: Bool { project == nil }
     var displayName: String {
-        guard !isImported else { return name }
-        if name.hasPrefix("Noelx File (") {
-            return project?.name ?? name
+        let filename = packageURL.deletingPathExtension().lastPathComponent
+        if filename.hasPrefix("Noelx File (") {
+            return filename
         }
-        return project?.name ?? name
+        return project?.name ?? filename
+    }
+    var workspaceURL: URL? {
+        PatchWorkspaceService.workspaceURL(projectID: id)
     }
 }
 
+struct PatchPasswordRequest: Identifiable {
+    let summary: PatchPackageSummary
+    var id: UUID { summary.packageID }
+}
+
 enum PatchProjectLibrary {
-    static let sharedDirectory: URL = {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        return paths[0].appendingPathComponent("PatchLibrary", isDirectory: true)
-    }()
-    
-    static let importedDirectory: URL = {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        return paths[0].appendingPathComponent("ImportedPatches", isDirectory: true)
-    }()
-    
-    static func listAllItems(fileManager: FileManager = .default) -> [PatchLibraryItem] {
-        var items: [PatchLibraryItem] = []
-        
-        // List imported patches
-        do {
-            let importedURLs = try fileManager.contentsOfDirectory(
-                at: importedDirectory,
-                includingPropertiesForKeys: nil
-            )
-            for url in importedURLs where url.pathExtension == "3105" {
-                let project = loadProject(from: url)
-                items.append(PatchLibraryItem(
-                    name: url.deletingPathExtension().lastPathComponent,
-                    url: url,
-                    project: project,
-                    isImported: true
-                ))
-            }
-        } catch {
-            print("Failed to list imported patches: \(error)")
+    static func packageRootURL(fileManager: FileManager = .default) throws -> URL {
+        let base = try fileManager.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let root = base.appendingPathComponent("PatchProjects", isDirectory: true)
+        try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+
+    static func backupRootURL(fileManager: FileManager = .default) throws -> URL {
+        let root = try packageRootURL(fileManager: fileManager)
+            .appendingPathComponent("Backups", isDirectory: true)
+        try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+
+    static func installBundledPackagesIfNeeded(
+        bundle: Bundle = .main,
+        fileManager: FileManager = .default
+    ) {
+        guard let root = try? packageRootURL(fileManager: fileManager) else {
+            return
         }
-        
-        // List built-in patches from bundle
-        if let bundleURLs = Bundle.main.urls(forResourcesWithExtension: "3105", subdirectory: "Patches") {
-            for url in bundleURLs {
-                // Check if this built-in patch is already imported
-                let imported = items.contains { $0.url.lastPathComponent == url.lastPathComponent }
-                if !imported {
-                    let project = loadProject(from: url)
-                    items.append(PatchLibraryItem(
-                        name: url.deletingPathExtension().lastPathComponent,
-                        url: url,
-                        project: project,
-                        isImported: false
-                    ))
-                }
-            }
-        }
-        
-        // Also check the Patches folder for copied patches
-        let patchesDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("Patches")
-        if fileManager.fileExists(atPath: patchesDir.path) {
+
+        // Xcode may flatten folder references into the app bundle. Resolve both
+        // the intended Patches subdirectory and the flattened bundle root so
+        // standalone builds remain self-contained across packaging layouts.
+        let nestedURLs = bundle.urls(forResourcesWithExtension: "noelx", subdirectory: "Patches") ?? []
+        let flattenedURLs = bundle.urls(forResourcesWithExtension: "noelx", subdirectory: nil) ?? []
+        var seen = Set<String>()
+        let bundledURLs = (nestedURLs + flattenedURLs).filter { seen.insert($0.standardizedFileURL.path).inserted }
+
+        for sourceURL in bundledURLs {
+            let destinationURL = root.appendingPathComponent(sourceURL.lastPathComponent)
+            guard !fileManager.fileExists(atPath: destinationURL.path) else { continue }
             do {
-                let patchURLs = try fileManager.contentsOfDirectory(at: patchesDir, includingPropertiesForKeys: nil)
-                for url in patchURLs where url.pathExtension == "3105" {
-                    let alreadyExists = items.contains { $0.url.lastPathComponent == url.lastPathComponent }
-                    if !alreadyExists {
-                        let project = loadProject(from: url)
-                        items.append(PatchLibraryItem(
-                            name: url.deletingPathExtension().lastPathComponent,
-                            url: url,
-                            project: project,
-                            isImported: true
-                        ))
+                let data = try Data(contentsOf: sourceURL, options: .mappedIfSafe)
+                _ = try PatchPackageCodec.inspect(data)
+                try data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
+            } catch {
+                log("patch: skipped bundled package \(sourceURL.lastPathComponent): \(error)")
+            }
+        }
+    }
+
+    static func load(fileManager: FileManager = .default) -> [PatchLibraryItem] {
+        guard let root = try? packageRootURL(fileManager: fileManager),
+              let urls = try? fileManager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
+                options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+              ) else { return [] }
+
+        var byID: [UUID: PatchLibraryItem] = [:]
+        for url in urls where url.pathExtension.lowercased() == "noelx" {
+            do {
+                let data = try readPackage(at: url)
+                let summary = try PatchPackageCodec.inspect(data)
+                let decoded: DecodedPatchPackage?
+                if let contentKey = try PatchKeyStore.load(for: summary) {
+                    decoded = try PatchPackageCodec.decode(data, contentKey: contentKey)
+                } else if summary.isPasswordProtected {
+                    // Only the app's renamed bundled resources use the internal
+                    // key; imported packages remain locked for the user.
+                    guard url.deletingPathExtension().lastPathComponent.hasPrefix("Noelx File (") else {
+                        decoded = nil
+                        continue
+                    }
+                    do {
+                        let bundled = try PatchPackageCodec.decode(
+                            data,
+                            password: PatchPackageCodec.bundledResourcePassword
+                        )
+                        try PatchKeyStore.store(bundled.contentKey, for: summary)
+                        decoded = bundled
+                    } catch {
+                        decoded = nil
+                    }
+                } else {
+                    decoded = try PatchPackageCodec.decode(data, password: nil)
+                }
+                let item = PatchLibraryItem(
+                    summary: summary,
+                    project: decoded?.project,
+                    contentKey: decoded?.contentKey,
+                    packageURL: url
+                )
+                if summary.schemaVersion >= 2, let project = decoded?.project {
+                    do {
+                        _ = try PatchWorkspaceService.ensureWorkspace(for: project)
+                    } catch {
+                        log("patch: workspace unavailable for \(project.id.uuidString)")
                     }
                 }
+                byID[summary.packageID] = item
             } catch {
-                print("Failed to list Patches directory: \(error)")
+                log("patch: skipped invalid local package \(url.lastPathComponent)")
             }
         }
-        
-        return items.sorted { $0.displayName < $1.displayName }
+        return byID.values.sorted {
+            ($0.project?.updatedAt ?? .distantPast) > ($1.project?.updatedAt ?? .distantPast)
+        }
     }
-    
-    static func loadProject(from url: URL) -> PatchProject? {
-        // Try to parse the package file to get project info
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(PatchProject.self, from: data)
-    }
-    
+
     static func readPackage(at url: URL) throws -> Data {
-        return try Data(contentsOf: url)
+        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isDirectory != true,
+              values.isSymbolicLink != true,
+              values.isRegularFile == true else {
+            throw PatchPackageError.invalidProject
+        }
+        return try Data(contentsOf: url, options: .mappedIfSafe)
     }
-    
+
     static func save(
-        _ data: Data,
-        name: String,
-        to directory: URL,
+        data: Data,
+        projectName: String,
+        existingURL: URL? = nil,
         fileManager: FileManager = .default
     ) throws -> URL {
-        let safeName = sanitizedFilename(name)
-        let destination = directory.appendingPathComponent(safeName)
-        
-        if !fileManager.fileExists(atPath: directory.path) {
-            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        }
-        
-        try data.write(to: destination)
-        return destination
-    }
-    
-    static func installImportedPackage(
-        from sourceURL: URL,
-        fileManager: FileManager = .default
-    ) throws -> URL {
-        let fileName = sourceURL.lastPathComponent
-        let destination = importedDirectory.appendingPathComponent(fileName)
-        
-        if !fileManager.fileExists(atPath: importedDirectory.path) {
-            try fileManager.createDirectory(at: importedDirectory, withIntermediateDirectories: true)
-        }
-        
-        // If file already exists, remove it
-        if fileManager.fileExists(atPath: destination.path) {
-            try fileManager.removeItem(at: destination)
-        }
-        
-        try fileManager.copyItem(at: sourceURL, to: destination)
-        return destination
-    }
-    
-    static func delete(_ item: PatchLibraryItem, fileManager: FileManager = .default) throws {
-        if fileManager.fileExists(atPath: item.url.path) {
-            try fileManager.removeItem(at: item.url)
-        }
-    }
-    
-    static func synchronizeWorkspace(
-        fileManager: FileManager = .default
-    ) throws -> [PatchLibraryItem] {
-        // Ensure directories exist
-        if !fileManager.fileExists(atPath: sharedDirectory.path) {
-            try fileManager.createDirectory(at: sharedDirectory, withIntermediateDirectories: true)
-        }
-        if !fileManager.fileExists(atPath: importedDirectory.path) {
-            try fileManager.createDirectory(at: importedDirectory, withIntermediateDirectories: true)
-        }
-        
-        // Clean up orphaned files
-        let allItems = listAllItems(fileManager: fileManager)
-        
-        // Sync workspace - copy imported patches to shared directory
-        for item in allItems where item.isImported {
-            let destination = sharedDirectory.appendingPathComponent(item.url.lastPathComponent)
-            if !fileManager.fileExists(atPath: destination.path) {
-                try fileManager.copyItem(at: item.url, to: destination)
+        let destination: URL
+        if let existingURL {
+            destination = existingURL
+        } else {
+            let root = try packageRootURL(fileManager: fileManager)
+            let baseName = sanitizedFilename(projectName)
+            var candidate = root.appendingPathComponent(baseName).appendingPathExtension("noelx")
+            var suffix = 2
+            while fileManager.fileExists(atPath: candidate.path) {
+                candidate = root.appendingPathComponent("\(baseName)-\(suffix)").appendingPathExtension("noelx")
+                suffix += 1
             }
+            destination = candidate
         }
-        
-        return allItems
+        try data.write(to: destination, options: [.atomic, .completeFileProtection])
+        return destination
     }
-    
+
+    static func installImportedPackage(
+        data: Data,
+        decoded: DecodedPatchPackage,
+        summary: PatchPackageSummary,
+        existingURL: URL?,
+        fileManager: FileManager = .default
+    ) throws {
+        let previousData = try existingURL.map { try readPackage(at: $0) }
+        var savedURL: URL?
+        do {
+            savedURL = try save(
+                data: data,
+                projectName: decoded.project.name,
+                existingURL: existingURL,
+                fileManager: fileManager
+            )
+            if summary.schemaVersion >= 2 {
+                _ = try PatchWorkspaceService.replaceWorkspace(
+                    with: decoded.project,
+                    fileManager: fileManager
+                )
+            } else {
+                try? PatchWorkspaceService.deleteWorkspace(
+                    projectID: decoded.project.id,
+                    fileManager: fileManager
+                )
+            }
+        } catch {
+            if let previousData, let existingURL {
+                try? previousData.write(
+                    to: existingURL,
+                    options: [.atomic, .completeFileProtection]
+                )
+            } else if let savedURL, fileManager.fileExists(atPath: savedURL.path) {
+                try? fileManager.removeItem(at: savedURL)
+            }
+            throw error
+        }
+    }
+
+    static func delete(_ item: PatchLibraryItem, fileManager: FileManager = .default) throws {
+        if fileManager.fileExists(atPath: item.packageURL.path) {
+            try fileManager.removeItem(at: item.packageURL)
+        }
+        try? PatchWorkspaceService.deleteWorkspace(projectID: item.id, fileManager: fileManager)
+        try? PatchKeyStore.delete(for: item.summary)
+    }
+
+    static func synchronizeWorkspace(
+        item: PatchLibraryItem,
+        fileManager: FileManager = .default
+    ) throws -> PatchProject {
+        guard item.summary.schemaVersion >= 2,
+              let baseProject = item.project,
+              let contentKey = item.contentKey else {
+            throw PatchPackageError.invalidProject
+        }
+        let workspace = try PatchWorkspaceService.ensureWorkspace(
+            for: baseProject,
+            fileManager: fileManager
+        )
+        let project = try PatchWorkspaceService.snapshot(
+            baseProject: baseProject,
+            workspaceURL: workspace,
+            fileManager: fileManager
+        )
+        let original = try readPackage(at: item.packageURL)
+        let updated = try PatchPackageCodec.update(
+            original,
+            project: project,
+            contentKey: contentKey,
+            schemaVersion: PatchPackageCodec.latestSchemaVersion
+        )
+        _ = try save(
+            data: updated,
+            projectName: project.name,
+            existingURL: item.packageURL,
+            fileManager: fileManager
+        )
+        return project
+    }
+
     private static func sanitizedFilename(_ rawName: String) -> String {
-        let invalidChars = CharacterSet(charactersIn: "/\\?%*|\"<>:")
-        return rawName
-            .components(separatedBy: invalidChars)
-            .joined(separator: "_")
-            .appending(".3105")
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_ "))
+        let scalars = rawName.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "-" }
+        let result = String(scalars)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .prefix(80)
+        return result.isEmpty ? "Patch" : String(result)
     }
 }
