@@ -17,7 +17,7 @@
                BlueprintIdentifier = "3105A500"
                BuildableName = "OGIOS.app"
                BlueprintName = "OGIOS"
-               ReferencedContainer = "container:ThreeOneOSFive.xcodeproj">
+               ReferencedContainer = "container:ExternalNoelx.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -39,7 +39,7 @@
             BlueprintIdentifier = "3105A500"
             BuildableName = "OGIOS.app"
             BlueprintName = "OGIOS"
-            ReferencedContainer = "container:ThreeOneOSFive.xcodeproj">
+            ReferencedContainer = "container:ExternalNoelx.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -55,7 +55,7 @@
             BlueprintIdentifier = "3105A500"
             BuildableName = "OGIOS.app"
             BlueprintName = "OGIOS"
-            ReferencedContainer = "container:ThreeOneOSFive.xcodeproj">
+            ReferencedContainer = "container:ExternalNoelx.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
