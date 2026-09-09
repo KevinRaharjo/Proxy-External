@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$ROOT/build"
-ARCHIVE="$BUILD_DIR/ExternalNoelx.xcarchive"
-IPA="$BUILD_DIR/ExternalNoelx-unsigned.ipa"
+ARCHIVE="$BUILD_DIR/OGIOS.xcarchive"
+IPA="$BUILD_DIR/OGIOS-unsigned.ipa"
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
@@ -20,7 +20,7 @@ xcodebuild -list -project "$ROOT/ExternalNoelx.xcodeproj" || {
 echo "=== Building archive ==="
 xcodebuild \
   -project "$ROOT/ExternalNoelx.xcodeproj" \
-  -scheme ExternalNoelx \
+  -scheme OGIOS \
   -configuration Release \
   -sdk iphoneos \
   -archivePath "$ARCHIVE" \
@@ -34,7 +34,7 @@ if [ ! -d "$ARCHIVE" ]; then
     exit 1
 fi
 
-APP="$ARCHIVE/Products/Applications/ExternalNoelx.app"
+APP="$ARCHIVE/Products/Applications/OGIOS.app"
 if [ ! -d "$APP" ]; then
     echo "❌ .app not found at $APP" >&2
     exit 1
@@ -47,10 +47,6 @@ for package in "$APP"/*.3105; do
     [ -e "$package" ] || continue
     mv "$package" "$PATCH_DIR/"
 done
-
-# Hapus modifikasi PlistBuddy yang bisa bikin crash
-# /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable OGIOS" "$APP/Info.plist" || true
-# /usr/libexec/PlistBuddy -c "Set :CFBundlePackageType APPL" "$APP/Info.plist" || true
 
 mkdir -p "$BUILD_DIR/Payload"
 cp -R "$APP" "$BUILD_DIR/Payload/"
