@@ -1,533 +1,437 @@
+//
+//  ContentView.swift
+//  ExternalNoelx
+//
+//  Created by User on 22/03/25.
+//
+
 import SwiftUI
-import UIKit
-import AVFoundation
 
 struct ContentView: View {
-    @Environment(\.scenePhase) private var scenePhase
-    @EnvironmentObject private var appState: AppState
-    @State private var showSettings = false
-    @State private var showCleaner = false
-    @StateObject private var patchStore = PatchProjectStore()
-    @State private var patchOperationBusy = false
-    @State private var patchMessage = "READY — SELECT A PATCH"
-    @State private var aimDragEnabled = false
-    @State private var aimNeckEnabled = false
-    @State private var hspeitoffEnabled = false
-    @State private var hyperBalamagicaEnabled = false
-    @State private var aimBodyPackageEnabled = false
-    @State private var aimChestPackageEnabled = false
-    @State private var magicEnabled = false
-
+    @State private var selectedTab = 0
+    @State private var showLogView = false
+    
+    // MARK: - Patch States
+    @AppStorage("aimDragEnabled") private var aimDragEnabled = false
+    @AppStorage("aimNeckEnabled") private var aimNeckEnabled = false
+    @AppStorage("hspeitoffEnabled") private var hspeitoffEnabled = false
+    @AppStorage("hyperBalamagicaEnabled") private var hyperBalamagicaEnabled = false
+    @AppStorage("aimBodyPackageEnabled") private var aimBodyPackageEnabled = false
+    @AppStorage("aimChestPackageEnabled") private var aimChestPackageEnabled = false
+    @AppStorage("magicEnabled") private var magicEnabled = false
+    
+    @State private var isApplying = false
+    @State private var applyMessage: String?
+    @State private var showAlert = false
+    
+    @StateObject private var licenseManager = LicenseManager.shared
+    
     var body: some View {
-        ZStack {
-            AnimatedHyperBackdrop()
-                .ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 18) {
-                    brandHeader
-                    devicePanel
-                    patchOptions
-                    gameLaunchPanel
-                    footerStatus
-                    developerCredits
-                }
-                .padding(.horizontal, 18)
-                .padding(.top, 18)
-                .padding(.bottom, 28)
-            }
-        }
-        .preferredColorScheme(.dark)
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-        }
-        .sheet(isPresented: $showCleaner) {
-            CleanerView()
-        }
-        .sheet(item: $patchStore.passwordRequest, onDismiss: patchStore.cancelUnlock) { _ in
-            PatchUnlockPrompt(store: patchStore)
-        }
-        .onAppear { syncPatchStates() }
-        .onChange(of: scenePhase) { phase in
-            guard phase == .active, !patchOperationBusy else { return }
-            syncPatchStates()
-            patchMessage = "READY — SELECT A PATCH"
-        }
-    }
-
-    private var brandHeader: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("External Noelx")
-                    .font(.system(size: 25, weight: .black, design: .rounded))
-                    .tracking(3)
-                    .foregroundStyle(.white)
-                Text("PATCH CONTROL CENTER")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .tracking(1.7)
-                    .foregroundStyle(AppTheme.accent)
-            }
-
-            Spacer()
-
-            Button {
-                showSettings = true
-            } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(AppTheme.accent)
-                    .frame(width: 48, height: 48)
-                    .background(Color.black.opacity(0.38), in: Circle())
-                    .overlay(Circle().stroke(AppTheme.accent.opacity(0.42), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open settings")
-        }
-    }
-
-    private var devicePanel: some View {
-        VStack(spacing: 0) {
-            panelTitle("DEVICE STATUS", icon: "shield.lefthalf.filled")
-            statusRow(icon: "apple.logo", title: "iOS", value: AppInfo.osVersion, color: AppTheme.secondaryAccent)
-            statusRow(icon: "iphone", title: "Device", value: AppInfo.displayMachineName, color: AppTheme.secondaryAccent)
-            statusRow(icon: "checkmark.seal.fill", title: "Support", value: appState.isSupported ? "SUPPORTED" : "UNSUPPORTED", color: appState.isSupported ? .green : .red)
-        }
-        .padding(16)
-        .background(Color.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(AppTheme.accent.opacity(0.38), lineWidth: 1))
-    }
-
-    private var patchOptions: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                panelTitle("PATCH OPTIONS", icon: "bolt.fill")
-                Spacer()
-                Text("SELECT TO ENABLE")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.45))
-            }
-
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                patchCard(name: "Aim Drag", target: "FREE FIRE • NORMAL", package: Noelx File (6).3105", color: AppTheme.accent, state: $aimDragEnabled)
-                patchCard(name: "Aim Neck", target: "FREE FIRE • NORMAL", package: Noelx File (7).3105", color: AppTheme.secondaryAccent, state: $aimNeckEnabled)
-                patchCard(name: "Antenna", target: "FREE FIRE • NORMAL", package: Noelx File (8).3105", color: AppTheme.secondaryAccent, state: $hspeitoffEnabled)
-                patchCard(name: "144 FPS", target: "FREE FIRE • NORMAL", package: Noelx File (10).3105", color: AppTheme.secondaryAccent, state: $hyperBalamagicaEnabled)
-                patchCard(name: "Aim Body", target: "FREE FIRE • NORMAL", package: Noelx File (12).3105", color: AppTheme.accent, state: $aimBodyPackageEnabled)
-                patchCard(name: "Aim Chest", target: "FREE FIRE • NORMAL", package: Noelx File (2).3105", color: AppTheme.secondaryAccent, state: $aimChestPackageEnabled)
-                patchCard(name: "Magic", target: "FREE FIRE • NORMAL", package: Noelx File (14).3105", color: AppTheme.accent, state: $magicEnabled)
-            }
-
-            HStack(spacing: 8) {
-                Circle().fill(patchMessage.localizedCaseInsensitiveContains("successful") ? .green : AppTheme.accent).frame(width: 7, height: 7)
-                Text(patchOperationBusy ? "PROCESSING PATCH…" : patchMessage)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.72))
-                    .lineLimit(2)
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color.black.opacity(0.34), in: Capsule())
-        }
-    }
-
-    private func patchCard(name: String, target: String, package: String, color: Color, state: Binding<Bool>) -> some View {
-        PatchOptionCard(name: name, target: target, color: color, isEnabled: state, isBusy: patchOperationBusy) {
-            togglePatch(packageFilename: package, state: state)
-        }
-    }
-
-    private var gameLaunchPanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            panelTitle("LAUNCH GAME", icon: "arrow.up.forward.app.fill")
-            HStack(spacing: 12) {
-                launchButton(title: "FF NORMAL", subtitle: "Free Fire Normal", color: AppTheme.accent, scheme: "freefireth")
-                lockedLaunchButton(title: "FF MAX", subtitle: "Locked • Coming Soon", color: AppTheme.secondaryAccent)
-            }
-            Button {
-                showCleaner = true
-            } label: {
-                Label("Clean Cache & Temp", systemImage: "trash.slash.fill")
-                    .font(.system(size: 13, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(Color.black.opacity(0.40), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(AppTheme.accent.opacity(0.52), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open cache and temporary files cleaner")
-        }
-    }
-
-    private func launchButton(title: String, subtitle: String, color: Color, scheme: String) -> some View {
-        Button { openGame(scheme: scheme) } label: {
-            VStack(alignment: .leading, spacing: 7) {
-                Image(systemName: "arrow.up.right.square.fill")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(color)
-                Text(title)
-                    .font(.system(size: 13, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                Text(subtitle)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-            .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
-            .padding(.horizontal, 14)
-            .background(Color.black.opacity(0.40), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(color.opacity(0.38), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func lockedLaunchButton(title: String, subtitle: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(color.opacity(0.72))
-            Text(title)
-                .font(.system(size: 13, weight: .black, design: .rounded))
-                .foregroundStyle(.white.opacity(0.72))
-            Text(subtitle)
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(color.opacity(0.72))
-        }
-        .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
-        .padding(.horizontal, 14)
-        .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(color.opacity(0.24), lineWidth: 1))
-        .opacity(0.72)
-        .accessibilityLabel("FF MAX locked, coming soon")
-    }
-
-    private var footerStatus: some View {
-        HStack(spacing: 10) {
-            Circle().fill(.green).frame(width: 9, height: 9).shadow(color: .green, radius: 6)
-            Text("SISTEMA PRONTO")
-                .font(.system(size: 10, weight: .black, design: .rounded))
-                .tracking(1.2)
-                .foregroundStyle(.white.opacity(0.72))
-            Spacer()
-            Text("External Noelx • PRONTO")
-                .font(.system(size: 9, weight: .bold, design: .rounded))
-                .foregroundStyle(AppTheme.accent.opacity(0.8))
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 13)
-        .background(Color.black.opacity(0.45), in: Capsule())
-        .overlay(Capsule().stroke(AppTheme.accent.opacity(0.2), lineWidth: 1))
-    }
-
-    private var developerCredits: some View {
-        VStack(spacing: 10) {
-            Text("Developed by Noelx")
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.72))
-                .multilineTextAlignment(.center)
-
-            Text("Our Telegram channels")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundStyle(AppTheme.secondaryAccent.opacity(0.85))
-
-            HStack(spacing: 10) {
-                channelButton(title: "External Noelx Telegram", url: "https://t.me/ogios1")
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 4)
-        .padding(.bottom, 8)
-    }
-
-    private func channelButton(title: String, url: String) -> some View {
-        Button {
-            guard let destination = URL(string: url) else { return }
-            UIApplication.shared.open(destination)
-        } label: {
-            Label(title, systemImage: "paperplane.fill")
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(AppTheme.accent.opacity(0.18), in: Capsule())
-                .overlay(Capsule().stroke(AppTheme.accent.opacity(0.42), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func panelTitle(_ title: String, icon: String) -> some View {
-        Label(title, systemImage: icon)
-            .font(.system(size: 12, weight: .black, design: .rounded))
-            .tracking(1.4)
-            .foregroundStyle(AppTheme.accent)
-    }
-
-    private func statusRow(icon: String, title: String, value: String, color: Color) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 17, weight: .bold)).foregroundStyle(color).frame(width: 24)
-            Text(title).font(.system(size: 14, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.58))
-            Spacer()
-            Text(value).font(.system(size: 14, weight: .black, design: .rounded)).foregroundStyle(.white)
-        }
-        .padding(.top, 14)
-    }
-
-    private func syncPatchStates() {
-        aimDragEnabled = isPatchActive(Noelx File (6).3105")
-        aimNeckEnabled = isPatchActive(Noelx File (7).3105")
-        hspeitoffEnabled = isPatchActive(Noelx File (8).3105")
-        hyperBalamagicaEnabled = isPatchActive(Noelx File (10).3105")
-        aimBodyPackageEnabled = isPatchActive(Noelx File (12).3105")
-        aimChestPackageEnabled = isPatchActive(Noelx File (2).3105")
-        magicEnabled = isPatchActive(Noelx File (14).3105")
-    }
-
-    private func isPatchActive(_ packageFilename: String) -> Bool {
-        patchStore.items.first(where: { $0.packageURL.lastPathComponent.caseInsensitiveCompare(packageFilename) == .orderedSame })
-            .flatMap { DevicePatchService.latestReceipt(projectID: $0.id) } != nil
-    }
-
-    private enum PatchActionResult {
-        case applied
-        case restored
-        case unavailable(String)
-    }
-
-    private func setPatchState(for packageFilename: String, enabled: Bool) {
-        switch packageFilename {
-        case Noelx File (6).3105": aimDragEnabled = enabled
-        case Noelx File (7).3105": aimNeckEnabled = enabled
-        case Noelx File (8).3105": hspeitoffEnabled = enabled
-        case Noelx File (10).3105": hyperBalamagicaEnabled = enabled
-        case Noelx File (12).3105": aimBodyPackageEnabled = enabled
-        case Noelx File (2).3105": aimChestPackageEnabled = enabled
-        case Noelx File (14).3105": magicEnabled = enabled
-        default: break
-        }
-    }
-
-    private func togglePatch(packageFilename: String, state: Binding<Bool>) {
-        guard !patchOperationBusy else { return }
-        guard let item = patchStore.items.first(where: { $0.packageURL.lastPathComponent.caseInsensitiveCompare(packageFilename) == .orderedSame }) else {
-            patchMessage = "ERROR — PACKAGE NOT FOUND"
-            log("patch: package not found: \(packageFilename)")
-            return
-        }
-
-        let wasEnabled = state.wrappedValue
-        patchOperationBusy = true
-        patchMessage = "PROCESSING — \(packageFilename)"
-        let project = item.project
-        let projectID = item.id
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            let result: PatchActionResult
-            do {
-                if wasEnabled {
-                    guard let receipt = DevicePatchService.latestReceipt(projectID: projectID) else {
-                        result = .unavailable("NO ACTIVE RECEIPT — NOTHING TO RESTORE")
-                        DispatchQueue.main.async {
-                            self.setPatchState(for: packageFilename, enabled: false)
-                            self.patchMessage = "OFF — NO ACTIVE PATCH FOUND"
-                            self.patchOperationBusy = false
-                        }
-                        return
-                    }
-                    try DevicePatchService.restore(receipt: receipt)
-                    result = .restored
-                } else {
-                    guard let project else {
-                        result = .unavailable("PASSWORD REQUIRED — UNLOCK PACKAGE")
-                        DispatchQueue.main.async {
-                            self.patchStore.requestUnlock(for: item)
-                            self.patchMessage = "PASSWORD REQUIRED — ENTER PACKAGE PASSWORD"
-                            self.patchOperationBusy = false
-                        }
-                        return
-                    }
-                    _ = try DevicePatchService.apply(project: project)
-                    result = .applied
-                }
-            } catch {
-                result = .unavailable("FAILED — \(String(describing: error))")
-            }
-
-            DispatchQueue.main.async {
-                switch result {
-                case .applied:
-                    self.setPatchState(for: packageFilename, enabled: true)
-                    self.patchMessage = "Inject Successful — \(packageFilename)"
-                    PatchAudioFeedback.bypassActivated()
-                case .restored:
-                    self.setPatchState(for: packageFilename, enabled: false)
-                    self.patchMessage = "Restore Successful — \(packageFilename)"
-                    PatchAudioFeedback.originalRestored()
-                case .unavailable(let message):
-                    self.patchMessage = message
-                }
-                self.patchOperationBusy = false
-            }
-        }
-    }
-
-    private func openGame(scheme: String) {
-        guard let url = URL(string: "\(scheme)://") else { return }
-        UIApplication.shared.open(url, options: [:]) { success in
-            log("launch: \(scheme) success=\(success)")
-        }
-    }
-}
-
-private struct PatchOptionCard: View {
-    let name: String
-    let target: String
-    let color: Color
-    @Binding var isEnabled: Bool
-    let isBusy: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 11) {
-                HStack {
-                    Image(systemName: "bolt.fill").font(.system(size: 16, weight: .black)).foregroundStyle(color)
-                    Spacer()
-                    Text(isEnabled ? "ON" : "OFF")
-                        .font(.system(size: 11, weight: .black, design: .rounded))
-                        .foregroundStyle(isEnabled ? .green : .white.opacity(0.58))
-                }
-                Text(name)
-                    .font(.system(size: 17, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.78)
-                Text(target)
-                    .font(.system(size: 10, weight: .black, design: .rounded))
-                    .tracking(1.3)
-                    .foregroundStyle(color)
-                HStack(spacing: 7) {
-                    Circle().fill(isEnabled ? Color.green : Color.white.opacity(0.25)).frame(width: 8, height: 8)
-                    Text(isEnabled ? "PATCH ACTIVE" : "ACTIVATE PATCH")
-                        .font(.system(size: 9, weight: .black, design: .rounded))
-                        .tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.65))
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 142, alignment: .leading)
-            .padding(14)
-            .background(Color.black.opacity(0.52), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(isEnabled ? color.opacity(0.85) : color.opacity(0.28), lineWidth: isEnabled ? 1.5 : 1))
-            .shadow(color: isEnabled ? color.opacity(0.20) : .clear, radius: 12)
-        }
-        .buttonStyle(.plain)
-        .disabled(isBusy)
-        .opacity(isBusy ? 0.55 : 1)
-        .accessibilityLabel("\(name), \(target), \(isEnabled ? "On" : "Off")")
-    }
-}
-
-private enum PatchAudioFeedback {
-    private static let synthesizer = AVSpeechSynthesizer()
-    static func bypassActivated() { speak("Bypass ativado") }
-    static func originalRestored() { speak("Bypass desativado") }
-    private static func speak(_ message: String) {
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
-        try? session.setActive(true, options: [])
-        synthesizer.stopSpeaking(at: .immediate)
-        let utterance = AVSpeechUtterance(string: message)
-        let voices = AVSpeechSynthesisVoice.speechVoices()
-        utterance.voice = voices.first(where: {
-            ($0.language.hasPrefix("pt-BR") || $0.language.hasPrefix("pt-PT") || $0.language.hasPrefix("pt")) && $0.gender == .female && $0.quality == .enhanced
-        }) ?? voices.first(where: {
-            $0.language.hasPrefix("pt-BR") || $0.language.hasPrefix("pt-PT") || $0.language.hasPrefix("pt")
-        }) ?? AVSpeechSynthesisVoice(language: "pt-BR")
-        utterance.rate = 0.43
-        utterance.pitchMultiplier = 1.10
-        utterance.volume = 0.90
-        synthesizer.speak(utterance)
-    }
-}
-
-private struct PatchUnlockPrompt: View {
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: PatchProjectStore
-    @State private var password = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    SecureField("Package password", text: $password)
-                        .textContentType(.password)
-                        .submitLabel(.done)
-                        .onSubmit(unlock)
-                        .onChange(of: password) { _ in store.clearUnlockError() }
-                    if let errorKey = store.unlockErrorKey {
-                        Text(AppLanguage.english.text(errorKey))
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                    }
-                } footer: {
-                    Text("Enter the password once to unlock this External Noelx package on this device.")
-                }
-            }
-            .navigationTitle("Unlock package")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Unlock", action: unlock)
-                        .disabled(password.isEmpty || store.isBusy)
-                }
-            }
-        }
-    }
-
-    private func unlock() {
-        guard !password.isEmpty else { return }
-        store.unlock(password: password)
-    }
-}
-
-struct AnimatedHyperBackdrop: View {
-    @State private var animate = false
-    var body: some View {
-        GeometryReader { proxy in
+        NavigationView {
             ZStack {
-                AppTheme.pageBackground
-                Circle()
-                    .fill(AppTheme.accent.opacity(0.12))
-                    .frame(width: 280, height: 280)
-                    .blur(radius: 70)
-                    .offset(x: animate ? 120 : -120, y: -proxy.size.height * 0.23)
-                Circle()
-                    .fill(AppTheme.secondaryAccent.opacity(0.08))
-                    .frame(width: 260, height: 260)
-                    .blur(radius: 80)
-                    .offset(x: animate ? -100 : 100, y: proxy.size.height * 0.22)
-                GridOverlay()
+                AppTheme.background
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    headerView
+                    
+                    // Content based on tab
+                    if selectedTab == 0 {
+                        patchesView
+                    } else if selectedTab == 1 {
+                        FilesTabSwitcherView()
+                    } else if selectedTab == 2 {
+                        CleanerView()
+                    } else if selectedTab == 3 {
+                        SettingsView()
+                    } else if selectedTab == 4 {
+                        WallpaperLabView()
+                    }
+                    
+                    Spacer(minLength: 0)
+                    
+                    // Bottom Tab Bar
+                    tabBarView
+                }
+            }
+            .navigationBarHidden(true)
+            .alert(isPresented: $showAlert) {
+                Alert(
+                    title: Text("Apply Patches"),
+                    message: Text(applyMessage ?? ""),
+                    dismissButton: .default(Text("OK"))
+                )
             }
             .onAppear {
-                withAnimation(.easeInOut(duration: 7).repeatForever(autoreverses: true)) { animate = true }
+                loadPatchStates()
+            }
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
+    }
+    
+    // MARK: - Header View
+    private var headerView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("OGIOS")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.1")")
+                    .font(.caption)
+                    .foregroundColor(AppTheme.secondaryText)
+            }
+            
+            Spacer()
+            
+            // License Status
+            if licenseManager.isLicensed {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(.caption)
+                    Text("Licensed")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.green.opacity(0.2))
+                .cornerRadius(8)
+            }
+            
+            Button(action: { showLogView.toggle() }) {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.title3)
+                    .foregroundColor(.white)
+            }
+            .sheet(isPresented: $showLogView) {
+                LogView()
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(AppTheme.surface)
+    }
+    
+    // MARK: - Patches View
+    private var patchesView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Info Banner
+                HStack {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(AppTheme.accent)
+                    Text("Toggle patches below to apply modifications")
+                        .font(.subheadline)
+                        .foregroundColor(AppTheme.secondaryText)
+                    Spacer()
+                }
+                .padding()
+                .background(AppTheme.surface)
+                .cornerRadius(12)
+                .padding(.horizontal)
+                
+                // Patches Grid
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    patchCard(
+                        name: "Aim Drag",
+                        target: "FREE FIRE • NORMAL",
+                        package: "Noelx File (6).3105",
+                        color: AppTheme.accent,
+                        state: $aimDragEnabled
+                    )
+                    
+                    patchCard(
+                        name: "Aim Neck",
+                        target: "FREE FIRE • NORMAL",
+                        package: "Noelx File (7).3105",
+                        color: AppTheme.secondaryAccent,
+                        state: $aimNeckEnabled
+                    )
+                    
+                    patchCard(
+                        name: "Antenna",
+                        target: "FREE FIRE • NORMAL",
+                        package: "Noelx File (8).3105",
+                        color: AppTheme.secondaryAccent,
+                        state: $hspeitoffEnabled
+                    )
+                    
+                    patchCard(
+                        name: "144 FPS",
+                        target: "FREE FIRE • NORMAL",
+                        package: "Noelx File (10).3105",
+                        color: AppTheme.secondaryAccent,
+                        state: $hyperBalamagicaEnabled
+                    )
+                    
+                    patchCard(
+                        name: "Aim Body",
+                        target: "FREE FIRE • NORMAL",
+                        package: "Noelx File (12).3105",
+                        color: AppTheme.accent,
+                        state: $aimBodyPackageEnabled
+                    )
+                    
+                    patchCard(
+                        name: "Aim Chest",
+                        target: "FREE FIRE • NORMAL",
+                        package: "Noelx File (2).3105",
+                        color: AppTheme.secondaryAccent,
+                        state: $aimChestPackageEnabled
+                    )
+                    
+                    patchCard(
+                        name: "Magic",
+                        target: "FREE FIRE • NORMAL",
+                        package: "Noelx File (14).3105",
+                        color: AppTheme.accent,
+                        state: $magicEnabled
+                    )
+                }
+                .padding(.horizontal)
+                
+                // Apply Button
+                Button(action: applyPatches) {
+                    HStack {
+                        if isApplying {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .padding(.trailing, 8)
+                        }
+                        Text(isApplying ? "Applying..." : "Apply Patches")
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(
+                        LinearGradient(
+                            colors: [AppTheme.accent, AppTheme.accent.opacity(0.7)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
+                .disabled(isApplying || !licenseManager.isLicensed)
+                .padding(.horizontal)
+                .padding(.top, 8)
+                
+                if !licenseManager.isLicensed {
+                    Text("Please activate license to apply patches")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                        .padding(.horizontal)
+                }
+            }
+            .padding(.vertical, 16)
+        }
+    }
+    
+    // MARK: - Patch Card
+    private func patchCard(name: String, target: String, package: String, color: Color, state: Binding<Bool>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(name)
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Spacer()
+                Toggle("", isOn: state)
+                    .toggleStyle(SwitchToggleStyle(tint: color))
+                    .labelsHidden()
+            }
+            
+            Text(target)
+                .font(.caption)
+                .foregroundColor(AppTheme.secondaryText)
+            
+            Text(package)
+                .font(.caption2)
+                .foregroundColor(AppTheme.secondaryText.opacity(0.7))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding()
+        .background(AppTheme.surface)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(state.wrappedValue ? color : Color.clear, lineWidth: 2)
+        )
+    }
+    
+    // MARK: - Tab Bar
+    private var tabBarView: some View {
+        HStack(spacing: 0) {
+            TabBarButton(
+                icon: "square.grid.2x2",
+                title: "Patches",
+                isSelected: selectedTab == 0,
+                action: { selectedTab = 0 }
+            )
+            
+            TabBarButton(
+                icon: "folder",
+                title: "Files",
+                isSelected: selectedTab == 1,
+                action: { selectedTab = 1 }
+            )
+            
+            TabBarButton(
+                icon: "trash",
+                title: "Cleaner",
+                isSelected: selectedTab == 2,
+                action: { selectedTab = 2 }
+            )
+            
+            TabBarButton(
+                icon: "gearshape",
+                title: "Settings",
+                isSelected: selectedTab == 3,
+                action: { selectedTab = 3 }
+            )
+            
+            TabBarButton(
+                icon: "photo",
+                title: "Wallpaper",
+                isSelected: selectedTab == 4,
+                action: { selectedTab = 4 }
+            )
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .background(AppTheme.surface)
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(AppTheme.border),
+            alignment: .top
+        )
+    }
+    
+    // MARK: - Functions
+    private func loadPatchStates() {
+        aimDragEnabled = isPatchActive("Noelx File (6).3105")
+        aimNeckEnabled = isPatchActive("Noelx File (7).3105")
+        hspeitoffEnabled = isPatchActive("Noelx File (8).3105")
+        hyperBalamagicaEnabled = isPatchActive("Noelx File (10).3105")
+        aimBodyPackageEnabled = isPatchActive("Noelx File (12).3105")
+        aimChestPackageEnabled = isPatchActive("Noelx File (2).3105")
+        magicEnabled = isPatchActive("Noelx File (14).3105")
+    }
+    
+    private func isPatchActive(_ package: String) -> Bool {
+        // Check if patch package is installed/active
+        let patchURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Patches")
+            .appendingPathComponent(package)
+        return patchURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+    }
+    
+    private func applyPatches() {
+        guard licenseManager.isLicensed else {
+            applyMessage = "Please activate your license first"
+            showAlert = true
+            return
+        }
+        
+        isApplying = true
+        applyMessage = nil
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            var successCount = 0
+            var errors: [String] = []
+            
+            let patches: [(String, Bool)] = [
+                ("Noelx File (6).3105", aimDragEnabled),
+                ("Noelx File (7).3105", aimNeckEnabled),
+                ("Noelx File (8).3105", hspeitoffEnabled),
+                ("Noelx File (10).3105", hyperBalamagicaEnabled),
+                ("Noelx File (12).3105", aimBodyPackageEnabled),
+                ("Noelx File (2).3105", aimChestPackageEnabled),
+                ("Noelx File (14).3105", magicEnabled)
+            ]
+            
+            for (package, enabled) in patches {
+                do {
+                    try applySinglePatch(package: package, enabled: enabled)
+                    successCount += 1
+                } catch {
+                    errors.append("\(package): \(error.localizedDescription)")
+                }
+            }
+            
+            DispatchQueue.main.async {
+                isApplying = false
+                
+                if errors.isEmpty {
+                    applyMessage = "✅ Successfully applied \(successCount) patches"
+                } else {
+                    applyMessage = "⚠️ \(successCount) applied, \(errors.count) failed:\n\(errors.joined(separator: "\n"))"
+                }
+                showAlert = true
+            }
+        }
+    }
+    
+    private func applySinglePatch(package: String, enabled: Bool) throws {
+        let fileManager = FileManager.default
+        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let patchesURL = documentsURL.appendingPathComponent("Patches")
+        let packageURL = patchesURL.appendingPathComponent(package)
+        
+        if enabled {
+            // Apply patch - copy from bundle to documents
+            if let bundleURL = Bundle.main.url(forResource: package, withExtension: nil) {
+                if !fileManager.fileExists(atPath: patchesURL.path) {
+                    try fileManager.createDirectory(at: patchesURL, withIntermediateDirectories: true)
+                }
+                
+                if fileManager.fileExists(atPath: packageURL.path) {
+                    try fileManager.removeItem(at: packageURL)
+                }
+                try fileManager.copyItem(at: bundleURL, to: packageURL)
+                print("✅ Applied patch: \(package)")
+            } else {
+                print("⚠️ Package not found in bundle: \(package)")
+            }
+        } else {
+            // Remove patch
+            if fileManager.fileExists(atPath: packageURL.path) {
+                try fileManager.removeItem(at: packageURL)
+                print("✅ Removed patch: \(package)")
             }
         }
     }
 }
 
-private struct GridOverlay: View {
+// MARK: - Tab Bar Button
+struct TabBarButton: View {
+    let icon: String
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    
     var body: some View {
-        Canvas { context, size in
-            var path = Path()
-            let spacing: CGFloat = 44
-            stride(from: CGFloat(0), through: size.width, by: spacing).forEach { x in
-                path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: size.height))
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                Text(title)
+                    .font(.caption2)
             }
-            stride(from: CGFloat(0), through: size.height, by: spacing).forEach { y in
-                path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: size.width, y: y))
-            }
-            context.stroke(path, with: .color(AppTheme.accent.opacity(0.055)), lineWidth: 1)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .foregroundColor(isSelected ? AppTheme.accent : AppTheme.secondaryText)
         }
     }
+}
+
+#Preview {
+    ContentView()
 }
