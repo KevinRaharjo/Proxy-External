@@ -555,3 +555,6 @@ enum PatchTransaction {
         digest(Data(PatchPathValidator.canonicalFileURL(url).path.utf8))
     }
 }
+
+// MARK: - Codable
+extension PatchTransactionReceipt: Codable {}
