@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$ROOT/build"
-ARCHIVE="$BUILD_DIR/OGIOS.xcarchive"
+ARCHIVE="$BUILD_DIR/NixxTime.xcarchive"
 IPA="$BUILD_DIR/External-Nixx.ipa"
 
 rm -rf "$BUILD_DIR"
@@ -20,7 +20,7 @@ xcodebuild -list -project "$ROOT/ExternalNoelx.xcodeproj" || {
 echo "=== Building archive ==="
 xcodebuild \
   -project "$ROOT/ExternalNoelx.xcodeproj" \
-  -scheme OGIOS \
+  -scheme NixxTime \
   -configuration Release \
   -sdk iphoneos \
   -archivePath "$ARCHIVE" \
@@ -34,7 +34,7 @@ if [ ! -d "$ARCHIVE" ]; then
     exit 1
 fi
 
-APP="$ARCHIVE/Products/Applications/OGIOS.app"
+APP="$ARCHIVE/Products/Applications/NixxTime.app"
 if [ ! -d "$APP" ]; then
     echo "❌ .app not found at $APP" >&2
     exit 1
