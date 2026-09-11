@@ -13,7 +13,6 @@ struct ContentView: View {
     @State private var aimDragEnabled = false
     @State private var aimNeckEnabled = false
     @State private var hspeitoffEnabled = false
-    @State private var hyperBalamagicaEnabled = false
     @State private var aimBodyPackageEnabled = false
     @State private var aimChestPackageEnabled = false
     @State private var magicEnabled = false
@@ -120,7 +119,6 @@ struct ContentView: View {
                 patchCard(name: "Aim Drag", target: "FREE FIRE • NORMAL", package: "Noexk File (6).3105", color: AppTheme.accent, state: $aimDragEnabled)
                 patchCard(name: "Aim Neck", target: "FREE FIRE • NORMAL", package: "Noexk File (7).3105", color: AppTheme.secondaryAccent, state: $aimNeckEnabled)
                 patchCard(name: "Antenna", target: "FREE FIRE • NORMAL", package: "Noexk File (8).3105", color: AppTheme.secondaryAccent, state: $hspeitoffEnabled)
-                patchCard(name: "144 FPS", target: "FREE FIRE • NORMAL", package: "Noexk File (10).3105", color: AppTheme.secondaryAccent, state: $hyperBalamagicaEnabled)
                 patchCard(name: "Aim Body", target: "FREE FIRE • NORMAL", package: "Noexk File (12).3105", color: AppTheme.accent, state: $aimBodyPackageEnabled)
                 patchCard(name: "Aim Chest", target: "FREE FIRE • NORMAL", package: "Noexk File (2).3105", color: AppTheme.secondaryAccent, state: $aimChestPackageEnabled)
                 patchCard(name: "Magic", target: "FREE FIRE • NORMAL", package: "Noexk File (14).3105", color: AppTheme.accent, state: $magicEnabled)
@@ -284,7 +282,6 @@ struct ContentView: View {
         aimDragEnabled = isPatchActive("Noexk File (6).3105")
         aimNeckEnabled = isPatchActive("Noexk File (7).3105")
         hspeitoffEnabled = isPatchActive("Noexk File (8).3105")
-        hyperBalamagicaEnabled = isPatchActive("Noexk File (10).3105")
         aimBodyPackageEnabled = isPatchActive("Noexk File (12).3105")
         aimChestPackageEnabled = isPatchActive("Noexk File (2).3105")
         magicEnabled = isPatchActive("Noexk File (14).3105")
@@ -306,7 +303,6 @@ struct ContentView: View {
         case "Noexk File (6).3105": aimDragEnabled = enabled
         case "Noexk File (7).3105": aimNeckEnabled = enabled
         case "Noexk File (8).3105": hspeitoffEnabled = enabled
-        case "Noexk File (10).3105": hyperBalamagicaEnabled = enabled
         case "Noexk File (12).3105": aimBodyPackageEnabled = enabled
         case "Noexk File (2).3105": aimChestPackageEnabled = enabled
         case "Noexk File (14).3105": magicEnabled = enabled
@@ -332,7 +328,6 @@ struct ContentView: View {
             let result: PatchActionResult
             do {
                 if wasEnabled {
-                    // 🔥 RESTORE - Matiin patch
                     guard let receipt = DevicePatchService.latestReceipt(projectID: projectID) else {
                         result = .unavailable("NO ACTIVE RECEIPT — NOTHING TO RESTORE")
                         DispatchQueue.main.async {
@@ -345,7 +340,6 @@ struct ContentView: View {
                     try DevicePatchService.restore(receipt: receipt)
                     result = .restored
                 } else {
-                    // 🚀 APPLY - Nyalain patch
                     guard let project else {
                         result = .unavailable("PASSWORD REQUIRED — UNLOCK PACKAGE")
                         DispatchQueue.main.async {
