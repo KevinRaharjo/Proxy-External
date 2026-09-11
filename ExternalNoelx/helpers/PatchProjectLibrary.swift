@@ -9,11 +9,16 @@ struct PatchLibraryItem: Identifiable {
     var id: UUID { summary.packageID }
     var isLocked: Bool { project == nil }
     var displayName: String {
+        // Ambil dari project name kalo ada
+        if let project = project {
+            return project.name
+        }
+        // Fallback ke nama file
         let filename = packageURL.deletingPathExtension().lastPathComponent
         if filename.hasPrefix("Noexk File (") {
             return filename
         }
-        return project?.name ?? filename
+        return filename
     }
     var workspaceURL: URL? {
         PatchWorkspaceService.workspaceURL(projectID: id)
@@ -49,7 +54,7 @@ enum PatchProjectLibrary {
         bundle: Bundle = .main,
         fileManager: FileManager = .default
     ) {
-        // 🔥 INSTALL SEMUA PATCH DARI BUNDLE (FF Normal + FF Max)
+        // Install patch dari semua subfolder
         let targetFolders = ["FF Normal", "FF Max", "Patches"]
         
         for targetFolder in targetFolders {
@@ -64,11 +69,9 @@ enum PatchProjectLibrary {
     ) {
         guard let root = try? packageRootURL(fileManager: fileManager) else { return }
         
-        // Buat subfolder target
         let targetRoot = root.appendingPathComponent(subdirectory, isDirectory: true)
         try? fileManager.createDirectory(at: targetRoot, withIntermediateDirectories: true)
         
-        // Cari file .3105 di bundle
         let nestedURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: subdirectory) ?? []
         let flattenedURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: nil) ?? []
         var seen = Set<String>()
@@ -87,11 +90,9 @@ enum PatchProjectLibrary {
         }
     }
 
-    // 🔥 LOAD PATCH DENGAN FILTER TARGET
     static func load(target: String = "FF Normal", fileManager: FileManager = .default) -> [PatchLibraryItem] {
         guard let root = try? packageRootURL(fileManager: fileManager) else { return [] }
         
-        // Cari folder target
         let targetFolder = root.appendingPathComponent(target, isDirectory: true)
         let searchURL = fileManager.fileExists(atPath: targetFolder.path) ? targetFolder : root
         
@@ -266,12 +267,4 @@ enum PatchProjectLibrary {
         return project
     }
 
-    private static func sanitizedFilename(_ rawName: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_ "))
-        let scalars = rawName.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "-" }
-        let result = String(scalars)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .prefix(80)
-        return result.isEmpty ? "Patch" : String(result)
-    }
-}
+    private static func sanitizedFilename(_ rawName: String) ->
