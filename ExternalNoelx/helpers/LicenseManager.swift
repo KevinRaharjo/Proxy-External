@@ -28,8 +28,8 @@ final class LicenseManager: ObservableObject {
     // MARK: - Config
 
     /// Support & contact channels (tampil di maintenance & activation view)
-    let supportWhatsApp = "https://wa.me/6281234567890"       // GANTI NOMOR WA KAMU
-    let supportTelegram = "https://t.me/nixxtime"              // GANTI USERNAME TELEGRAM KAMU
+    let supportWhatsApp = "https://wa.me/6283866914817"       // GANTI NOMOR WA KAMU
+    let supportTelegram = "https://t.me/Yahah22"              // GANTI USERNAME TELEGRAM KAMU
 
     // MARK: - Storage
 
