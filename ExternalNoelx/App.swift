@@ -6,8 +6,9 @@ struct ExternalNoelxApp: App {
     @StateObject private var appState = AppState()
     @StateObject private var licenseManager = LicenseManager()
     @StateObject private var patchDraftCoordinator = PatchDraftCoordinator()
-    @StateObject private var fileOperationCoordinator = FileOperationCoordinator();
+    @StateObject private var fileOperationCoordinator = FileOperationCoordinator()
     @AppStorage(AppLanguage.storageKey) private var languageCode = AppLanguage.english.rawValue
+    @AppStorage("selected_target") private var selectedTarget = ""
     @State private var updateOffer: AppUpdateChecker.Offer?
     @Environment(\.scenePhase) private var scenePhase
 
@@ -30,18 +31,23 @@ struct ExternalNoelxApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if licenseManager.isActive {
+                if !licenseManager.isActive {
+                    // 1. Belum login
+                    LicenseActivationView(manager: licenseManager)
+                } else if selectedTarget.isEmpty {
+                    // 2. Udah login, belum pilih target
+                    TargetSelectionView(selectedTarget: $selectedTarget)
+                } else {
+                    // 3. Udah login + pilih target
                     ContentView()
                         .environmentObject(licenseManager)
-                } else {
-                    LicenseActivationView(manager: licenseManager)
                 }
             }
-                .environmentObject(appState)
-                .environmentObject(patchDraftCoordinator)
-                .environmentObject(fileOperationCoordinator)
-                .environment(\.appLanguage, language)
-                .environment(\.locale, language.locale)
+            .environmentObject(appState)
+            .environmentObject(patchDraftCoordinator)
+            .environmentObject(fileOperationCoordinator)
+            .environment(\.appLanguage, language)
+            .environment(\.locale, language.locale)
             .alert(item: $updateOffer) { offer in
                 Alert(
                     title: Text(language.text("update.title")),
@@ -135,8 +141,6 @@ class AppState: ObservableObject {
     private func refreshKernelExploitStatus() {
         guard !kernelExploitRunning else { return }
 
-        // iOS < 26: kernel R/W success persists (no sandbox probe)
-        // iOS >= 26: verify full sandbox escape is still active
         if KernelExploit.requiresSandboxEscape {
             if KernelExploit.hasSandboxAccess() {
                 if !exploitStatus.isSuccess {
