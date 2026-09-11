@@ -9,7 +9,7 @@
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
-    <string>com.kevin.ogios</string>
+    <string>com.kevin.nixxtime</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -20,6 +20,7 @@
     <string>1.1.1</string>
     <key>CFBundleVersion</key>
     <string>7</string>
+
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>
@@ -35,6 +36,7 @@
             </array>
         </dict>
     </array>
+
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
@@ -46,6 +48,7 @@
             </array>
         </dict>
     </array>
+
     <key>UTExportedTypeDeclarations</key>
     <array>
         <dict>
@@ -68,6 +71,15 @@
             </dict>
         </dict>
     </array>
+
+    <!-- Allow opening WhatsApp & Telegram apps -->
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>whatsapp</string>
+        <string>tg</string>
+        <string>telegram</string>
+    </array>
+
     <key>LSSupportsOpeningDocumentsInPlace</key>
     <true/>
     <key>UIFileSharingEnabled</key>
@@ -80,17 +92,21 @@
     <string>External Nixx needs access to photos for wallpaper customization.</string>
     <key>NSDocumentsFolderUsageDescription</key>
     <string>External Nixx needs access to documents.</string>
+
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
         <false/>
     </dict>
+
     <key>UILaunchScreen</key>
     <dict/>
+
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
     </array>
+
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
@@ -98,8 +114,10 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
+
     <key>MinimumOSVersion</key>
     <string>16.0</string>
+
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>
