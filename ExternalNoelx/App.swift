@@ -14,7 +14,7 @@ struct ExternalNoelxApp: App {
 
     init() {
         setupLogCapture()
-        log("app: External Noelx launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machineName)")
+        log("app: External NIXX launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machineName)")
     }
 
     private var language: AppLanguage {
