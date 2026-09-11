@@ -93,7 +93,7 @@ struct SettingsView: View {
         Section {
             Picker("Target Game", selection: $selectedTarget) {
                 Text("FF Normal").tag("freefireth")
-                Text("FF Max").tag("firefiremax_placeholder")
+                Text("FF Max").tag("firefiremax")
             }
             .pickerStyle(.segmented)
         } header: {
