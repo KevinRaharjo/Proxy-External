@@ -32,7 +32,7 @@ if [[ -e "$APP/embedded.mobileprovision" || -e "$APP/_CodeSignature" ]]; then
   exit 1
 fi
 
-if [[ ! -x "$APP/OGIOS" ]]; then
+if [[ ! -x "$APP/NixxTime" ]]; then
   echo "Error: expected original executable OGIOS was not found in the app bundle." >&2
   exit 1
 fi
