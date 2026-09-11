@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$ROOT/build"
 ARCHIVE="$BUILD_DIR/OGIOS.xcarchive"
-IPA="$BUILD_DIR/OGIOS-unsigned.ipa"
+IPA="$BUILD_DIR/External-Nixx.ipa"
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
@@ -20,7 +20,7 @@ xcodebuild -list -project "$ROOT/ExternalNoelx.xcodeproj" || {
 echo "=== Building archive ==="
 xcodebuild \
   -project "$ROOT/ExternalNoelx.xcodeproj" \
-  -scheme OGIOS \
+  -scheme External Nixx \
   -configuration Release \
   -sdk iphoneos \
   -archivePath "$ARCHIVE" \
