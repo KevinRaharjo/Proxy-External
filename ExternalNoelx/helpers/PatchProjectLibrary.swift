@@ -267,4 +267,12 @@ enum PatchProjectLibrary {
         return project
     }
 
-    private static func sanitizedFilename(_ rawName: String) ->
+    private static func sanitizedFilename(_ rawName: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_ "))
+        let scalars = rawName.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "-" }
+        let result = String(scalars)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .prefix(80)
+        return result.isEmpty ? "Patch" : String(result)
+    }
+}
