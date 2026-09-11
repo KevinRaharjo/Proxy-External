@@ -35,6 +35,7 @@
 		3105A239 /* FileManagerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105A111; };
 		3105A240 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105A112; };
 		3105A241 /* SupportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105A113; };
+		3105A242 /* TargetSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105A114; };
 		3105B214 /* PatchProjectModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105B114; };
 		3105B215 /* PatchPackageCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105B115; };
 		3105B216 /* PatchKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105B116; };
@@ -119,6 +120,7 @@
 		3105A111 /* FileManagerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileManagerService.swift; sourceTree = "<group>"; };
 		3105A112 /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
 		3105A113 /* SupportPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportPolicy.swift; sourceTree = "<group>"; };
+		3105A114 /* TargetSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetSelectionView.swift; sourceTree = "<group>"; };
 		3105K100 /* LicenseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseManager.swift; sourceTree = "<group>"; };
 		3105K101 /* LicenseActivationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseActivationView.swift; sourceTree = "<group>"; };
 		3105B114 /* PatchProjectModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatchProjectModels.swift; sourceTree = "<group>"; };
@@ -189,7 +191,6 @@
 				3105A406 /* kexploit */,
 				3105A120 /* Localizable.strings */,
 				3105A031 /* Assets.xcassets */,
-				3105A407 /* Patches */,
 			);
 			path = ExternalNoelx;
 			sourceTree = "<group>";
@@ -231,6 +232,7 @@
 				3105E101 /* CleanerView.swift */,
 				3105F106 /* WallpaperLabView.swift */,
 				3105F108 /* OnboardingView.swift */,
+				3105A114 /* TargetSelectionView.swift */,
 			);
 			path = views;
 			sourceTree = "<group>";
@@ -300,13 +302,6 @@
 				3105A097 /* xpaci.h */,
 			);
 			path = kexploit;
-			sourceTree = "<group>";
-		};
-		3105A407 /* Patches */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Patches;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -406,6 +401,7 @@
 				3105J206,
 				3105A240,
 				3105A241,
+				3105A242,
 				3105K200,
 				3105K201,
 				3105B214,
