@@ -17,112 +17,13 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    HStack(spacing: 14) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("External Nixx").font(.headline)
-                            Text(language.text("common.version", appVersion))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                Section {
-                    Picker("Target Game", selection: $selectedTarget) {
-                        Text("FF Normal").tag("freefireth")
-                        Text("FF Max").tag("freefiremax")
-                    }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("Target Game")
-                } footer: {
-                    Text("Pilih game yang mau di-patch. Patch akan di-load sesuai target.")
-                }
-
-                Section(language.text("settings.language")) {
-                    Picker(language.text("settings.language"), selection: $languageCode) {
-                        ForEach(AppLanguage.allCases) { option in
-                            Text(option.displayName).tag(option.rawValue)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                }
-
-                Section(language.text("common.device")) {
-                    LabeledContent(language.text("dashboard.hardware_model"), value: AppInfo.displayMachineName)
-                    LabeledContent(language.text("settings.ios_version"), value: "\(AppInfo.osVersion) (\(AppInfo.osBuild))")
-                    LabeledContent("Device ID") {
-                        Text(shortDeviceID)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section("License") {
-                    HStack {
-                        Image(systemName: licenseManager.isActive ? "checkmark.seal.fill" : "xmark.seal.fill")
-                            .foregroundStyle(licenseManager.isActive ? .green : .red)
-                            .frame(width: 24)
-                        Text(licenseManager.isActive ? "Aktif" : "Tidak Aktif")
-                            .font(.subheadline.weight(.semibold))
-                        Spacer()
-                    }
-
-                    if let expiry = licenseManager.expirationDate {
-                        LabeledContent("Kadaluarsa") {
-                            Text(expiry, style: .date)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Button {
-                        showDeactivateAlert = true
-                    } label: {
-                        Label("Deactivate License", systemImage: "key.slash.fill")
-                            .foregroundColor(.orange)
-                    }
-                } header: {
-                    Text("License")
-                } footer: {
-                    Text("Deactivate akan menghapus aktivasi dari device ini. Kamu bisa aktifkan ulang dengan key yang sama di device lain.")
-                }
-
-                Section {
-                    HStack {
-                        Text(language.text("settings.current_version"))
-                        Spacer()
-                        Text(language.text(appState.isSupported ? "settings.supported" : "settings.unsupported"))
-                        .foregroundStyle(appState.isSupported ? Color.green : Color.red)
-                    }
-                    LabeledContent("iOS 17", value: ExploitSupportPolicy.verifiedIOS17Range)
-                    LabeledContent("iOS 18", value: ExploitSupportPolicy.verifiedIOS18Range)
-                    LabeledContent("iOS 26", value: ExploitSupportPolicy.verifiedIOS26Range)
-                } header: {
-                    Text(language.text("settings.verified_versions"))
-                }
-
-                Section {
-                    Button {
-                        showResetAlert = true
-                    } label: {
-                        Label("Reset All Patches", systemImage: "trash.fill")
-                            .foregroundColor(.red)
-                    }
-
-                    Button {
-                        showRestartAlert = true
-                    } label: {
-                        Label("Reset All Data (Clean Install)", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundColor(.red)
-                    }
-                } header: {
-                    Text("⚠️ Danger Zone")
-                } footer: {
-                    Text("Reset All Patches will remove all patch backups and reset patch states.\nReset All Data will remove everything including license.")
-                }
+                appInfoSection
+                targetGameSection
+                languageSection
+                deviceSection
+                licenseSection
+                versionSupportSection
+                dangerZoneSection
             }
             .tint(AppTheme.accent)
             .scrollContentBackground(.hidden)
@@ -169,16 +70,169 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Sections
+
+    @ViewBuilder
+    private var appInfoSection: some View {
+        Section {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("External Nixx")
+                        .font(.headline)
+                    Text(language.text("common.version", appVersion))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder
+    private var targetGameSection: some View {
+        Section {
+            Picker("Target Game", selection: $selectedTarget) {
+                Text("FF Normal").tag("freefireth")
+                Text("FF Max").tag("firefiremax_placeholder")
+            }
+            .pickerStyle(.segmented)
+        } header: {
+            Text("Target Game")
+        } footer: {
+            Text("Pilih game yang mau di-patch. Patch akan di-load sesuai target.")
+        }
+    }
+
+    @ViewBuilder
+    private var languageSection: some View {
+        Section(language.text("settings.language")) {
+            Picker(language.text("settings.language"), selection: $languageCode) {
+                ForEach(AppLanguage.allCases) { option in
+                    Text(option.displayName).tag(option.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
+    }
+
+    @ViewBuilder
+    private var deviceSection: some View {
+        Section(language.text("common.device")) {
+            LabeledContent(
+                language.text("dashboard.hardware_model"),
+                value: AppInfo.displayMachineName
+            )
+            LabeledContent(
+                language.text("settings.ios_version"),
+                value: "\(AppInfo.osVersion) (\(AppInfo.osBuild))"
+            )
+            LabeledContent("Device ID") {
+                deviceIDText
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var deviceIDText: some View {
+        let rawID: String = licenseManager.deviceID
+        let shortID: String = String(rawID.prefix(16))
+        let display: String = shortID + "..."
+        Text(display)
+            .font(.caption.monospaced())
+            .foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder
+    private var licenseSection: some View {
+        Section {
+            licenseStatusRow
+            if let expiry = licenseManager.expirationDate {
+                LabeledContent("Kadaluarsa") {
+                    Text(expiry, style: .date)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Button {
+                showDeactivateAlert = true
+            } label: {
+                Label("Deactivate License", systemImage: "key.slash.fill")
+                    .foregroundColor(.orange)
+            }
+        } header: {
+            Text("License")
+        } footer: {
+            Text("Deactivate akan menghapus aktivasi dari device ini. Kamu bisa aktifkan ulang dengan key yang sama di device lain.")
+        }
+    }
+
+    @ViewBuilder
+    private var licenseStatusRow: some View {
+        let isActive: Bool = licenseManager.isActive
+        HStack {
+            Image(systemName: isActive ? "checkmark.seal.fill" : "xmark.seal.fill")
+                .foregroundStyle(isActive ? Color.green : Color.red)
+                .frame(width: 24)
+            Text(isActive ? "Aktif" : "Tidak Aktif")
+                .font(.subheadline.weight(.semibold))
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var versionSupportSection: some View {
+        Section {
+            HStack {
+                Text(language.text("settings.current_version"))
+                Spacer()
+                supportStatusText
+            }
+            LabeledContent("iOS 17", value: ExploitSupportPolicy.verifiedIOS17Range)
+            LabeledContent("iOS 18", value: ExploitSupportPolicy.verifiedIOS18Range)
+            LabeledContent("iOS 26", value: ExploitSupportPolicy.verifiedIOS26Range)
+        } header: {
+            Text(language.text("settings.verified_versions"))
+        }
+    }
+
+    @ViewBuilder
+    private var supportStatusText: some View {
+        let isSupported: Bool = appState.isSupported
+        let key: String = isSupported ? "settings.supported" : "settings.unsupported"
+        let color: Color = isSupported ? Color.green : Color.red
+        Text(language.text(key))
+            .foregroundStyle(color)
+    }
+
+    @ViewBuilder
+    private var dangerZoneSection: some View {
+        Section {
+            Button {
+                showResetAlert = true
+            } label: {
+                Label("Reset All Patches", systemImage: "trash.fill")
+                    .foregroundColor(.red)
+            }
+
+            Button {
+                showRestartAlert = true
+            } label: {
+                Label("Reset All Data (Clean Install)", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundColor(.red)
+            }
+        } header: {
+            Text("Danger Zone")
+        } footer: {
+            Text("Reset All Patches will remove all patch backups and reset patch states.\nReset All Data will remove everything including license.")
+        }
+    }
+
     // MARK: - Computed Properties
 
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "AppReleaseDisplayVersion") as? String
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
             ?? "1.0"
-    }
-
-    private var shortDeviceID: String {
-        String(licenseManager.deviceID.prefix(16)) + "…"
     }
 
     // MARK: - Actions
@@ -194,10 +248,10 @@ struct SettingsView: View {
             UserDefaults.standard.removeObject(forKey: "aimChestPackageEnabled")
             UserDefaults.standard.removeObject(forKey: "magicEnabled")
 
-            resetMessage = "✅ All patches reset successfully!"
+            resetMessage = "All patches reset successfully!"
             showResultAlert = true
         } catch {
-            resetMessage = "❌ Reset failed: \(error.localizedDescription)"
+            resetMessage = "Reset failed: \(error.localizedDescription)"
             showResultAlert = true
         }
     }
@@ -217,14 +271,14 @@ struct SettingsView: View {
             let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             try? FileManager.default.removeItem(at: appSupportURL)
 
-            resetMessage = "✅ All data reset successfully! Please restart the app."
+            resetMessage = "All data reset successfully! Please restart the app."
             showResultAlert = true
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 exit(0)
             }
         } catch {
-            resetMessage = "❌ Reset failed: \(error.localizedDescription)"
+            resetMessage = "Reset failed: \(error.localizedDescription)"
             showResultAlert = true
         }
     }
