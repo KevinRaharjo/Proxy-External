@@ -4,13 +4,15 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguage) private var language
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var licenseManager: LicenseManager
     @AppStorage(AppLanguage.storageKey) private var languageCode = AppLanguage.english.rawValue
     @AppStorage("selected_target") private var selectedTarget = "freefireth"
-    
+
     @State private var showResetAlert = false
     @State private var resetMessage = ""
     @State private var showRestartAlert = false
     @State private var showResultAlert = false
+    @State private var showDeactivateAlert = false
 
     var body: some View {
         NavigationStack {
@@ -18,7 +20,7 @@ struct SettingsView: View {
                 Section {
                     HStack(spacing: 14) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("External NIXX").font(.headline)
+                            Text("External Nixx").font(.headline)
                             Text(language.text("common.version", appVersion))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -52,6 +54,40 @@ struct SettingsView: View {
                 Section(language.text("common.device")) {
                     LabeledContent(language.text("dashboard.hardware_model"), value: AppInfo.displayMachineName)
                     LabeledContent(language.text("settings.ios_version"), value: "\(AppInfo.osVersion) (\(AppInfo.osBuild))")
+                    LabeledContent("Device ID") {
+                        Text(String(licenseManager.deviceID.prefix(16)) + "…")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("License") {
+                    HStack {
+                        Image(systemName: licenseManager.isActive ? "checkmark.seal.fill" : "xmark.seal.fill")
+                            .foregroundStyle(licenseManager.isActive ? .green : .red)
+                            .frame(width: 24)
+                        Text(licenseManager.isActive ? "Aktif" : "Tidak Aktif")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                    }
+
+                    if let expiry = licenseManager.expirationDate {
+                        LabeledContent("Kadaluarsa") {
+                            Text(expiry, style: .date)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Button {
+                        showDeactivateAlert = true
+                    } label: {
+                        Label("Deactivate License", systemImage: "key.slash.fill")
+                            .foregroundColor(.orange)
+                    }
+                } header: {
+                    Text("License")
+                } footer: {
+                    Text("Deactivate akan menghapus aktivasi dari device ini. Kamu bisa aktifkan ulang dengan key yang sama di device lain.")
                 }
 
                 Section {
@@ -75,7 +111,7 @@ struct SettingsView: View {
                         Label("Reset All Patches", systemImage: "trash.fill")
                             .foregroundColor(.red)
                     }
-                    
+
                     Button {
                         showRestartAlert = true
                     } label: {
@@ -115,6 +151,14 @@ struct SettingsView: View {
             } message: {
                 Text("This will remove everything including license, patches, and all data. Are you sure?")
             }
+            .alert("Deactivate License", isPresented: $showDeactivateAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Deactivate", role: .destructive) {
+                    licenseManager.deactivate()
+                }
+            } message: {
+                Text("Yakin mau hapus aktivasi dari device ini? Kamu bisa aktifkan ulang dengan key yang sama di device lain.")
+            }
             .alert("Result", isPresented: $showResultAlert) {
                 Button("OK") {
                     resetMessage = ""
@@ -130,18 +174,18 @@ struct SettingsView: View {
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
             ?? "1.0"
     }
-    
+
     private func performResetPatches() {
         do {
             try DevicePatchService.resetAllPatches()
-            
+
             UserDefaults.standard.removeObject(forKey: "aimDragEnabled")
             UserDefaults.standard.removeObject(forKey: "aimNeckEnabled")
             UserDefaults.standard.removeObject(forKey: "hspeitoffEnabled")
             UserDefaults.standard.removeObject(forKey: "aimBodyPackageEnabled")
             UserDefaults.standard.removeObject(forKey: "aimChestPackageEnabled")
             UserDefaults.standard.removeObject(forKey: "magicEnabled")
-            
+
             resetMessage = "✅ All patches reset successfully!"
             showResultAlert = true
         } catch {
@@ -149,25 +193,25 @@ struct SettingsView: View {
             showResultAlert = true
         }
     }
-    
+
     private func performResetAllData() {
         do {
             try DevicePatchService.resetAllPatches()
-            
+
             if let bundleID = Bundle.main.bundleIdentifier {
                 UserDefaults.standard.removePersistentDomain(forName: bundleID)
             }
             UserDefaults.standard.synchronize()
-            
+
             let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
             try? FileManager.default.removeItem(at: documentsURL)
-            
+
             let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             try? FileManager.default.removeItem(at: appSupportURL)
-            
+
             resetMessage = "✅ All data reset successfully! Please restart the app."
             showResultAlert = true
-            
+
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 exit(0)
             }
