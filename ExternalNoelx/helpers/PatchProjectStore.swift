@@ -35,14 +35,22 @@ final class PatchProjectStore: ObservableObject {
     }
 
     private var pendingUnlock: PendingUnlock?
+    private var currentTarget: String = "FF Normal"
 
-    init() {
+    init(target: String = "FF Normal") {
+        self.currentTarget = target
         PatchProjectLibrary.installBundledPackagesIfNeeded()
         reload()
     }
 
     func reload() {
-        items = PatchProjectLibrary.load()
+        items = PatchProjectLibrary.load(target: currentTarget)
+    }
+    
+    // 🔥 SET TARGET BARU
+    func setTarget(_ target: String) {
+        currentTarget = target
+        reload()
     }
 
     func create(project: PatchProject, password: String?) {
@@ -331,8 +339,6 @@ final class PatchProjectStore: ObservableObject {
 
     private func failUnlock(_ error: PatchPackageError) {
         isBusy = false
-        // Keep the password sheet open so the user can retry.
-        // Presenting an alert while dismissing the sheet swallows the message.
         if case .invalidPasswordOrCorruptedPackage = error {
             unlockErrorKey = "patch.error.wrong_password"
         } else {
