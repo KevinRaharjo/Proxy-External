@@ -9,16 +9,8 @@ struct PatchLibraryItem: Identifiable {
     var id: UUID { summary.packageID }
     var isLocked: Bool { project == nil }
     var displayName: String {
-        // Ambil dari project name kalo ada
-        if let project = project {
-            return project.name
-        }
-        // Fallback ke nama file
         let filename = packageURL.deletingPathExtension().lastPathComponent
-        if filename.hasPrefix("Noexk File (") {
-            return filename
-        }
-        return filename
+        return project?.name ?? filename
     }
     var workspaceURL: URL? {
         PatchWorkspaceService.workspaceURL(projectID: id)
@@ -50,51 +42,125 @@ enum PatchProjectLibrary {
         return root
     }
 
+    // MARK: - Install Bundled Packages (Support Folder Reference)
     static func installBundledPackagesIfNeeded(
         bundle: Bundle = .main,
         fileManager: FileManager = .default
     ) {
-        // Install patch dari semua subfolder
-        let targetFolders = ["FF Normal", "FF Max", "Patches"]
-        
-        for targetFolder in targetFolders {
-            installBundledPackages(from: targetFolder, bundle: bundle, fileManager: fileManager)
+        guard let root = try? packageRootURL(fileManager: fileManager) else {
+            log("patch: failed to get package root URL")
+            return
         }
+
+        // 🔥 CARI SEMUA FILE .3105 DI BUNDLE (folder reference)
+        // Folder reference di Xcode jadi folder `Patches` di dalam bundle
+        // Isi subfolder:
+        //   - Patches/FF Normal/*.3105
+        //   - Patches/FF Max/*.3105
+        
+        var totalInstalled = 0
+        
+        // Cari di subfolder "Patches/FF Normal"
+        totalInstalled += installFromSubdirectory(
+            "Patches/FF Normal",
+            targetFolder: "FF Normal",
+            root: root,
+            bundle: bundle,
+            fileManager: fileManager
+        )
+        
+        // Cari di subfolder "Patches/FF Max"
+        totalInstalled += installFromSubdirectory(
+            "Patches/FF Max",
+            targetFolder: "FF Max",
+            root: root,
+            bundle: bundle,
+            fileManager: fileManager
+        )
+        
+        // Fallback: cari di root bundle (kalo Xcode flatten folder)
+        let fallbackURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: nil) ?? []
+        if !fallbackURLs.isEmpty {
+            for sourceURL in fallbackURLs {
+                // Tentukan target folder dari nama file
+                let filename = sourceURL.lastPathComponent
+                let targetFolder: String
+                if filename.hasPrefix("FFM ") {
+                    targetFolder = "FF Max"
+                } else if filename.hasPrefix("FFN ") || filename.hasPrefix("Noexk File") {
+                    targetFolder = "FF Normal"
+                } else {
+                    targetFolder = "FF Normal"
+                }
+                
+                let targetRoot = root.appendingPathComponent(targetFolder, isDirectory: true)
+                try? fileManager.createDirectory(at: targetRoot, withIntermediateDirectories: true)
+                let destinationURL = targetRoot.appendingPathComponent(filename)
+                
+                guard !fileManager.fileExists(atPath: destinationURL.path) else { continue }
+                do {
+                    let data = try Data(contentsOf: sourceURL, options: .mappedIfSafe)
+                    _ = try PatchPackageCodec.inspect(data)
+                    try data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
+                    totalInstalled += 1
+                    log("patch: installed fallback \(filename)")
+                } catch {
+                    log("patch: skipped fallback \(filename): \(error)")
+                }
+            }
+        }
+        
+        log("patch: total installed bundled packages = \(totalInstalled)")
     }
     
-    private static func installBundledPackages(
-        from subdirectory: String,
+    // MARK: - Helper: Install from Subdirectory
+    private static func installFromSubdirectory(
+        _ subdirectory: String,
+        targetFolder: String,
+        root: URL,
         bundle: Bundle,
         fileManager: FileManager
-    ) {
-        guard let root = try? packageRootURL(fileManager: fileManager) else { return }
-        
-        let targetRoot = root.appendingPathComponent(subdirectory, isDirectory: true)
+    ) -> Int {
+        let targetRoot = root.appendingPathComponent(targetFolder, isDirectory: true)
         try? fileManager.createDirectory(at: targetRoot, withIntermediateDirectories: true)
         
-        let nestedURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: subdirectory) ?? []
-        let flattenedURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: nil) ?? []
-        var seen = Set<String>()
-        let bundledURLs = (nestedURLs + flattenedURLs).filter { seen.insert($0.standardizedFileURL.path).inserted }
+        // Cari file .3105 di subfolder
+        guard let urls = bundle.urls(forResourcesWithExtension: "3105", subdirectory: subdirectory) else {
+            log("patch: no files found in bundle subdirectory '\(subdirectory)'")
+            return 0
+        }
         
-        for sourceURL in bundledURLs {
-            let destinationURL = targetRoot.appendingPathComponent(sourceURL.lastPathComponent)
+        var installed = 0
+        for sourceURL in urls {
+            let filename = sourceURL.lastPathComponent
+            let destinationURL = targetRoot.appendingPathComponent(filename)
+            
             guard !fileManager.fileExists(atPath: destinationURL.path) else { continue }
+            
             do {
                 let data = try Data(contentsOf: sourceURL, options: .mappedIfSafe)
                 _ = try PatchPackageCodec.inspect(data)
                 try data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
+                installed += 1
+                log("patch: installed \(targetFolder)/\(filename)")
             } catch {
-                log("patch: skipped bundled package \(sourceURL.lastPathComponent): \(error)")
+                log("patch: skipped \(targetFolder)/\(filename): \(error)")
             }
         }
+        
+        log("patch: installed \(installed) files from '\(subdirectory)'")
+        return installed
     }
 
+    // MARK: - Load Patches (Filter by Target)
     static func load(target: String = "FF Normal", fileManager: FileManager = .default) -> [PatchLibraryItem] {
         guard let root = try? packageRootURL(fileManager: fileManager) else { return [] }
         
+        // Cari folder target
         let targetFolder = root.appendingPathComponent(target, isDirectory: true)
         let searchURL = fileManager.fileExists(atPath: targetFolder.path) ? targetFolder : root
+        
+        log("patch: loading from \(searchURL.path)")
         
         guard let urls = try? fileManager.contentsOfDirectory(
             at: searchURL,
@@ -108,13 +174,11 @@ enum PatchProjectLibrary {
                 let data = try readPackage(at: url)
                 let summary = try PatchPackageCodec.inspect(data)
                 let decoded: DecodedPatchPackage?
+                
                 if let contentKey = try PatchKeyStore.load(for: summary) {
                     decoded = try PatchPackageCodec.decode(data, contentKey: contentKey)
                 } else if summary.isPasswordProtected {
-                    guard url.deletingPathExtension().lastPathComponent.hasPrefix("Noexk File (") else {
-                        decoded = nil
-                        continue
-                    }
+                    // Coba decode pake bundled resource password
                     do {
                         let bundled = try PatchPackageCodec.decode(
                             data,
@@ -123,17 +187,20 @@ enum PatchProjectLibrary {
                         try PatchKeyStore.store(bundled.contentKey, for: summary)
                         decoded = bundled
                     } catch {
+                        log("patch: could not decode \(url.lastPathComponent) with bundled password")
                         decoded = nil
                     }
                 } else {
                     decoded = try PatchPackageCodec.decode(data, password: nil)
                 }
+                
                 let item = PatchLibraryItem(
                     summary: summary,
                     project: decoded?.project,
                     contentKey: decoded?.contentKey,
                     packageURL: url
                 )
+                
                 if summary.schemaVersion >= 2, let project = decoded?.project {
                     do {
                         _ = try PatchWorkspaceService.ensureWorkspace(for: project)
@@ -142,10 +209,13 @@ enum PatchProjectLibrary {
                     }
                 }
                 byID[summary.packageID] = item
+                log("patch: loaded \(url.lastPathComponent)")
             } catch {
                 log("patch: skipped invalid local package \(url.lastPathComponent)")
             }
         }
+        
+        log("patch: total loaded = \(byID.count) from \(target)")
         return byID.values.sorted {
             ($0.project?.updatedAt ?? .distantPast) > ($1.project?.updatedAt ?? .distantPast)
         }
