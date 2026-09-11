@@ -14,7 +14,7 @@ struct ExternalNoelxApp: App {
 
     init() {
         setupLogCapture()
-        log("app: External NIXX launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machineName)")
+        log("app: External Nixx launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machineName)")
     }
 
     private var language: AppLanguage {
@@ -32,7 +32,7 @@ struct ExternalNoelxApp: App {
         WindowGroup {
             Group {
                 if !licenseManager.isActive {
-                    // 1. Belum login
+                    // 1. Belum login / lisensi tidak aktif
                     LicenseActivationView(manager: licenseManager)
                 } else if selectedTarget.isEmpty {
                     // 2. Udah login, belum pilih target
@@ -67,6 +67,7 @@ struct ExternalNoelxApp: App {
             }
             .onChange(of: scenePhase) { phase in
                 guard phase == .active else { return }
+                // Re-verify saat app kembali ke foreground
                 licenseManager.beginLaunchSession()
                 appState.detectSupport()
             }
@@ -77,6 +78,8 @@ struct ExternalNoelxApp: App {
         }
     }
 }
+
+// MARK: - AppState (tidak berubah)
 
 class AppState: ObservableObject {
     @Published var exploitStatus: ExploitStatus = .notStarted
