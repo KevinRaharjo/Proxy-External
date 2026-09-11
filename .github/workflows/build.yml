@@ -1,12 +1,9 @@
 name: Build Unsigned IPA
 
 on:
-  workflow_dispatch:  # ← HANYA manual, gak auto
-    inputs:
-      branch:
-        description: 'Branch to build'
-        required: true
-        default: 'main'
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,11 +11,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || 'main' }}
 
       - name: Make script executable
         run: chmod +x ./build_unsigned.sh
-      
+
       - name: Build
         run: ./build_unsigned.sh
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: External-Nixx-ipa
+          path: build/External-Nixx.ipa
+          retention-days: 30
