@@ -10,16 +10,9 @@ struct ContentView: View {
     @StateObject private var patchStore = PatchProjectStore()
     @State private var patchOperationBusy = false
     @State private var patchMessage = "READY — SELECT A PATCH"
-    @State private var aimDragEnabled = false
-    @State private var aimNeckEnabled = false
-    @State private var hspeitoffEnabled = false
-    @State private var aimBodyPackageEnabled = false
-    @State private var aimChestPackageEnabled = false
-    @State private var magicEnabled = false
     @State private var showAlert = false
     @State private var alertMessage = ""
 
-    // 🔥 BACA TARGET DARI USERDEFAULTS
     @AppStorage("selected_target") private var selectedTarget = "freefireth"
 
     var body: some View {
@@ -52,19 +45,18 @@ struct ContentView: View {
             PatchUnlockPrompt(store: patchStore)
         }
         .onAppear {
-            // 🔥 SET TARGET KE PATCH STORE
             let targetFolder = selectedTarget == "freefiremax" ? "FF Max" : "FF Normal"
             patchStore.setTarget(targetFolder)
-            syncPatchStates()
+            patchMessage = "READY — SELECT A PATCH"
         }
         .onChange(of: selectedTarget) { newTarget in
             let targetFolder = newTarget == "freefiremax" ? "FF Max" : "FF Normal"
             patchStore.setTarget(targetFolder)
-            syncPatchStates()
+            patchMessage = "READY — SELECT A PATCH"
         }
         .onChange(of: scenePhase) { phase in
             guard phase == .active, !patchOperationBusy else { return }
-            syncPatchStates()
+            patchStore.reload()
             patchMessage = "READY — SELECT A PATCH"
         }
         .alert(isPresented: $showAlert) {
@@ -123,22 +115,38 @@ struct ContentView: View {
             HStack {
                 panelTitle("PATCH OPTIONS", icon: "bolt.fill")
                 Spacer()
-                Text("SELECT TO ENABLE")
+                Text("\(patchStore.items.count) PATCHES")
                     .font(.system(size: 9, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.45))
             }
 
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                patchCard(name: "Aim Drag", target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL", package: "Noexk File (6).3105", color: AppTheme.accent, state: $aimDragEnabled)
-                patchCard(name: "Aim Neck", target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL", package: "Noexk File (7).3105", color: AppTheme.secondaryAccent, state: $aimNeckEnabled)
-                patchCard(name: "Antenna", target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL", package: "Noexk File (8).3105", color: AppTheme.secondaryAccent, state: $hspeitoffEnabled)
-                patchCard(name: "Aim Body", target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL", package: "Noexk File (12).3105", color: AppTheme.accent, state: $aimBodyPackageEnabled)
-                patchCard(name: "Aim Chest", target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL", package: "Noexk File (2).3105", color: AppTheme.secondaryAccent, state: $aimChestPackageEnabled)
-                patchCard(name: "Magic", target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL", package: "Noexk File (14).3105", color: AppTheme.accent, state: $magicEnabled)
+            if patchStore.items.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "folder.badge.questionmark")
+                        .font(.system(size: 40))
+                        .foregroundColor(.gray)
+                    Text("No patches found")
+                        .font(.headline)
+                        .foregroundColor(.gray)
+                    Text("Add .3105 files to Patches/\(selectedTarget == "freefiremax" ? "FF Max" : "FF Normal")/")
+                        .font(.caption)
+                        .foregroundColor(.gray.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(40)
+                .background(Color.black.opacity(0.3))
+                .cornerRadius(16)
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    ForEach(patchStore.items) { item in
+                        dynamicPatchCard(item: item)
+                    }
+                }
             }
 
             HStack(spacing: 8) {
-                Circle().fill(patchMessage.localizedCaseInsensitiveContains("successful") ? .green : AppTheme.accent).frame(width: 7, height: 7)
+                Circle().fill(patchMessage.localizedCaseInsensitiveContains("✅") ? .green : AppTheme.accent).frame(width: 7, height: 7)
                 Text(patchOperationBusy ? "PROCESSING PATCH…" : patchMessage)
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.72))
@@ -151,9 +159,17 @@ struct ContentView: View {
         }
     }
 
-    private func patchCard(name: String, target: String, package: String, color: Color, state: Binding<Bool>) -> some View {
-        PatchOptionCard(name: name, target: target, color: color, isEnabled: state, isBusy: patchOperationBusy) {
-            togglePatch(packageFilename: package, state: state)
+    private func dynamicPatchCard(item: PatchLibraryItem) -> some View {
+        let isEnabled = DevicePatchService.latestReceipt(projectID: item.id) != nil
+        
+        return PatchOptionCard(
+            name: item.displayName,
+            target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL",
+            color: AppTheme.accent,
+            isEnabled: .constant(isEnabled),
+            isBusy: patchOperationBusy
+        ) {
+            togglePatch(item: item, currentlyEnabled: isEnabled)
         }
     }
 
@@ -161,7 +177,6 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             panelTitle("LAUNCH GAME", icon: "arrow.up.forward.app.fill")
 
-            // 🔥 CUMA TAMPILIN TARGET YANG DIPILIH
             if selectedTarget == "freefiremax" {
                 launchButton(
                     title: "FF MAX",
@@ -189,7 +204,6 @@ struct ContentView: View {
                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(AppTheme.accent.opacity(0.52), lineWidth: 1))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open cache and temporary files cleaner")
         }
     }
 
@@ -285,60 +299,28 @@ struct ContentView: View {
         .padding(.top, 14)
     }
 
-    private func syncPatchStates() {
-        aimDragEnabled = isPatchActive("Noexk File (6).3105")
-        aimNeckEnabled = isPatchActive("Noexk File (7).3105")
-        hspeitoffEnabled = isPatchActive("Noexk File (8).3105")
-        aimBodyPackageEnabled = isPatchActive("Noexk File (12).3105")
-        aimChestPackageEnabled = isPatchActive("Noexk File (2).3105")
-        magicEnabled = isPatchActive("Noexk File (14).3105")
-    }
-
-    private func isPatchActive(_ packageFilename: String) -> Bool {
-        patchStore.items.first(where: { $0.packageURL.lastPathComponent.caseInsensitiveCompare(packageFilename) == .orderedSame })
-            .flatMap { DevicePatchService.latestReceipt(projectID: $0.id) } != nil
-    }
-
     private enum PatchActionResult {
         case applied
         case restored
         case unavailable(String)
     }
 
-    private func setPatchState(for packageFilename: String, enabled: Bool) {
-        switch packageFilename {
-        case "Noexk File (6).3105": aimDragEnabled = enabled
-        case "Noexk File (7).3105": aimNeckEnabled = enabled
-        case "Noexk File (8).3105": hspeitoffEnabled = enabled
-        case "Noexk File (12).3105": aimBodyPackageEnabled = enabled
-        case "Noexk File (2).3105": aimChestPackageEnabled = enabled
-        case "Noexk File (14).3105": magicEnabled = enabled
-        default: break
-        }
-    }
-
-    private func togglePatch(packageFilename: String, state: Binding<Bool>) {
+    private func togglePatch(item: PatchLibraryItem, currentlyEnabled: Bool) {
         guard !patchOperationBusy else { return }
-        guard let item = patchStore.items.first(where: { $0.packageURL.lastPathComponent.caseInsensitiveCompare(packageFilename) == .orderedSame }) else {
-            patchMessage = "ERROR — PACKAGE NOT FOUND"
-            log("patch: package not found: \(packageFilename)")
-            return
-        }
-
-        let wasEnabled = state.wrappedValue
+        
         patchOperationBusy = true
-        patchMessage = "PROCESSING — \(packageFilename)"
+        patchMessage = currentlyEnabled ? "RESTORING — \(item.displayName)" : "APPLYING — \(item.displayName)"
+        
         let project = item.project
         let projectID = item.id
-
+        
         DispatchQueue.global(qos: .userInitiated).async {
             let result: PatchActionResult
             do {
-                if wasEnabled {
+                if currentlyEnabled {
                     guard let receipt = DevicePatchService.latestReceipt(projectID: projectID) else {
                         result = .unavailable("NO ACTIVE RECEIPT — NOTHING TO RESTORE")
                         DispatchQueue.main.async {
-                            self.setPatchState(for: packageFilename, enabled: false)
                             self.patchMessage = "OFF — NO ACTIVE PATCH FOUND"
                             self.patchOperationBusy = false
                         }
@@ -362,16 +344,14 @@ struct ContentView: View {
             } catch {
                 result = .unavailable("FAILED — \(String(describing: error))")
             }
-
+            
             DispatchQueue.main.async {
                 switch result {
                 case .applied:
-                    self.setPatchState(for: packageFilename, enabled: true)
-                    self.patchMessage = "✅ Patch Applied — \(packageFilename)"
+                    self.patchMessage = "✅ Applied — \(item.displayName)"
                     PatchAudioFeedback.bypassActivated()
                 case .restored:
-                    self.setPatchState(for: packageFilename, enabled: false)
-                    self.patchMessage = "✅ Restored — \(packageFilename)"
+                    self.patchMessage = "✅ Restored — \(item.displayName)"
                     PatchAudioFeedback.originalRestored()
                 case .unavailable(let message):
                     self.patchMessage = "❌ \(message)"
@@ -391,6 +371,7 @@ struct ContentView: View {
     }
 }
 
+// MARK: - Patch Option Card
 private struct PatchOptionCard: View {
     let name: String
     let target: String
