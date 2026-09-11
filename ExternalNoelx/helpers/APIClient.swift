@@ -61,7 +61,7 @@ actor APIClient {
     static let shared = APIClient()
 
     // ⚠️ CHANGE THIS TO YOUR VPS DOMAIN
-    private let baseURL = URL(string: "https://api.nixxtime.com")!
+    private let baseURL = URL(string: "https://api.proxynixx.my.id/")!
 
     private let session: URLSession
     private let decoder: JSONDecoder
