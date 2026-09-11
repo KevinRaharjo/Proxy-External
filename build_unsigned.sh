@@ -20,7 +20,7 @@ xcodebuild -list -project "$ROOT/ExternalNoelx.xcodeproj" || {
 echo "=== Building archive ==="
 xcodebuild \
   -project "$ROOT/ExternalNoelx.xcodeproj" \
-  -scheme External Nixx \
+  -scheme "External Nixx" \
   -configuration Release \
   -sdk iphoneos \
   -archivePath "$ARCHIVE" \
@@ -34,7 +34,7 @@ if [ ! -d "$ARCHIVE" ]; then
     exit 1
 fi
 
-APP="$ARCHIVE/Products/Applications/OGIOS.app"
+APP="$ARCHIVE/Products/Applications/Nixx.app"
 if [ ! -d "$APP" ]; then
     echo "❌ .app not found at $APP" >&2
     exit 1
