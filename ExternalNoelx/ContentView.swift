@@ -19,6 +19,9 @@ struct ContentView: View {
     @State private var showAlert = false
     @State private var alertMessage = ""
 
+    // 🔥 BACA TARGET DARI USERDEFAULTS
+    @AppStorage("selected_target") private var selectedTarget = "freefireth"
+
     var body: some View {
         ZStack {
             AnimatedHyperBackdrop()
@@ -48,7 +51,17 @@ struct ContentView: View {
         .sheet(item: $patchStore.passwordRequest, onDismiss: patchStore.cancelUnlock) { _ in
             PatchUnlockPrompt(store: patchStore)
         }
-        .onAppear { syncPatchStates() }
+        .onAppear {
+            // 🔥 SET TARGET KE PATCH STORE
+            let targetFolder = selectedTarget == "freefiremax" ? "FF Max" : "FF Normal"
+            patchStore.setTarget(targetFolder)
+            syncPatchStates()
+        }
+        .onChange(of: selectedTarget) { newTarget in
+            let targetFolder = newTarget == "freefiremax" ? "FF Max" : "FF Normal"
+            patchStore.setTarget(targetFolder)
+            syncPatchStates()
+        }
         .onChange(of: scenePhase) { phase in
             guard phase == .active, !patchOperationBusy else { return }
             syncPatchStates()
@@ -66,11 +79,11 @@ struct ContentView: View {
     private var brandHeader: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("External NIXX")
+                Text("External Noelx")
                     .font(.system(size: 25, weight: .black, design: .rounded))
                     .tracking(3)
                     .foregroundStyle(.white)
-                Text("PATCH CONTROL CENTER")
+                Text(selectedTarget == "freefiremax" ? "FF MAX EDITION" : "FF NORMAL EDITION")
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .tracking(1.7)
                     .foregroundStyle(AppTheme.accent)
@@ -116,12 +129,12 @@ struct ContentView: View {
             }
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                patchCard(name: "Aim Drag", target: "FREE FIRE • NORMAL", package: "Noexk File (6).3105", color: AppTheme.accent, state: $aimDragEnabled)
-                patchCard(name: "Aim Neck", target: "FREE FIRE • NORMAL", package: "Noexk File (7).3105", color: AppTheme.secondaryAccent, state: $aimNeckEnabled)
-                patchCard(name: "Antenna", target: "FREE FIRE • NORMAL", package: "Noexk File (8).3105", color: AppTheme.secondaryAccent, state: $hspeitoffEnabled)
-                patchCard(name: "Aim Body", target: "FREE FIRE • NORMAL", package: "Noexk File (12).3105", color: AppTheme.accent, state: $aimBodyPackageEnabled)
-                patchCard(name: "Aim Chest", target: "FREE FIRE • NORMAL", package: "Noexk File (2).3105", color: AppTheme.secondaryAccent, state: $aimChestPackageEnabled)
-                patchCard(name: "Magic", target: "FREE FIRE • NORMAL", package: "Noexk File (14).3105", color: AppTheme.accent, state: $magicEnabled)
+                patchCard(name: "Aim Drag", target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL", package: "Noexk File (6).3105", color: AppTheme.accent, state: $aimDragEnabled)
+                patchCard(name: "Aim Neck", target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL", package: "Noexk File (7).3105", color: AppTheme.secondaryAccent, state: $aimNeckEnabled)
+                patchCard(name: "Antenna", target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL", package: "Noexk File (8).3105", color: AppTheme.secondaryAccent, state: $hspeitoffEnabled)
+                patchCard(name: "Aim Body", target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL", package: "Noexk File (12).3105", color: AppTheme.accent, state: $aimBodyPackageEnabled)
+                patchCard(name: "Aim Chest", target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL", package: "Noexk File (2).3105", color: AppTheme.secondaryAccent, state: $aimChestPackageEnabled)
+                patchCard(name: "Magic", target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL", package: "Noexk File (14).3105", color: AppTheme.accent, state: $magicEnabled)
             }
 
             HStack(spacing: 8) {
@@ -147,10 +160,24 @@ struct ContentView: View {
     private var gameLaunchPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             panelTitle("LAUNCH GAME", icon: "arrow.up.forward.app.fill")
-            HStack(spacing: 12) {
-                launchButton(title: "FF NORMAL", subtitle: "Free Fire Normal", color: AppTheme.accent, scheme: "freefireth")
-                lockedLaunchButton(title: "FF MAX", subtitle: "Locked • Coming Soon", color: AppTheme.secondaryAccent)
+
+            // 🔥 CUMA TAMPILIN TARGET YANG DIPILIH
+            if selectedTarget == "freefiremax" {
+                launchButton(
+                    title: "FF MAX",
+                    subtitle: "Free Fire Max",
+                    color: AppTheme.secondaryAccent,
+                    scheme: "freefiremax"
+                )
+            } else {
+                launchButton(
+                    title: "FF NORMAL",
+                    subtitle: "Free Fire Normal",
+                    color: AppTheme.accent,
+                    scheme: "freefireth"
+                )
             }
+
             Button {
                 showCleaner = true
             } label: {
@@ -187,26 +214,6 @@ struct ContentView: View {
         .buttonStyle(.plain)
     }
 
-    private func lockedLaunchButton(title: String, subtitle: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(color.opacity(0.72))
-            Text(title)
-                .font(.system(size: 13, weight: .black, design: .rounded))
-                .foregroundStyle(.white.opacity(0.72))
-            Text(subtitle)
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(color.opacity(0.72))
-        }
-        .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
-        .padding(.horizontal, 14)
-        .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(color.opacity(0.24), lineWidth: 1))
-        .opacity(0.72)
-        .accessibilityLabel("FF MAX locked, coming soon")
-    }
-
     private var footerStatus: some View {
         HStack(spacing: 10) {
             Circle().fill(.green).frame(width: 9, height: 9).shadow(color: .green, radius: 6)
@@ -215,7 +222,7 @@ struct ContentView: View {
                 .tracking(1.2)
                 .foregroundStyle(.white.opacity(0.72))
             Spacer()
-            Text("External NIXX • PRONTO")
+            Text("External Noelx • PRONTO")
                 .font(.system(size: 9, weight: .bold, design: .rounded))
                 .foregroundStyle(AppTheme.accent.opacity(0.8))
         }
@@ -227,7 +234,7 @@ struct ContentView: View {
 
     private var developerCredits: some View {
         VStack(spacing: 10) {
-            Text("Developed by NIXX")
+            Text("Developed by Noelx")
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.72))
                 .multilineTextAlignment(.center)
@@ -237,7 +244,7 @@ struct ContentView: View {
                 .foregroundStyle(AppTheme.secondaryAccent.opacity(0.85))
 
             HStack(spacing: 10) {
-                channelButton(title: "External NIXX Telegram", url: "https://t.me/Yahah22")
+                channelButton(title: "External Noelx Telegram", url: "https://t.me/ogios1")
             }
         }
         .frame(maxWidth: .infinity)
@@ -475,7 +482,7 @@ private struct PatchUnlockPrompt: View {
                             .foregroundStyle(.red)
                     }
                 } footer: {
-                    Text("Enter the password once to unlock this External NIXX package on this device.")
+                    Text("Enter the password once to unlock this External Noelx package on this device.")
                 }
             }
             .navigationTitle("Unlock package")
