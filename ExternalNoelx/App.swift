@@ -33,7 +33,6 @@ struct ExternalNoelxApp: App {
             Group {
                 switch licenseManager.state {
                 case .checking:
-                    // Splash / loading
                     ZStack {
                         AnimatedHyperBackdrop()
                             .ignoresSafeArea()
@@ -62,7 +61,6 @@ struct ExternalNoelxApp: App {
                     }
 
                 case .offline:
-                    // Fallback — tetap pakai license activation
                     LicenseActivationView(manager: licenseManager)
                 }
             }
@@ -90,8 +88,14 @@ struct ExternalNoelxApp: App {
             }
             .onChange(of: scenePhase) { phase in
                 guard phase == .active else { return }
-                // Re-verify saat kembali ke foreground
-                licenseManager.beginLaunchSession()
+
+                // Hanya verify ulang kalau:
+                // 1. Lisensi belum aktif (user baru / logout), ATAU
+                // 2. Sudah lebih dari 1 jam sejak verify terakhir
+                if licenseManager.shouldReverifyOnForeground() {
+                    licenseManager.beginLaunchSession()
+                }
+
                 appState.detectSupport()
             }
             .onOpenURL { url in
@@ -103,6 +107,7 @@ struct ExternalNoelxApp: App {
 }
 
 // MARK: - AppState
+
 class AppState: ObservableObject {
     @Published var exploitStatus: ExploitStatus = .notStarted
     @Published var unsupportedMessage: String?
