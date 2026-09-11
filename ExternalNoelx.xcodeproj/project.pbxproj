@@ -71,6 +71,7 @@
 		3105K200 /* LicenseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105K100; };
 		3105K201 /* LicenseActivationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105K101; };
 		3105A211 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3105A031; };
+		3105P900 /* Patches in Resources */ = {isa = PBXBuildFile; fileRef = 3105P800; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -157,6 +158,7 @@
 		3105A122 /* vi */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = vi; path = vi.lproj/Localizable.strings; sourceTree = "<group>"; };
 		3105A123 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		3105B123 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		3105P800 /* Patches */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Patches; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -191,6 +193,7 @@
 				3105A406 /* kexploit */,
 				3105A120 /* Localizable.strings */,
 				3105A031 /* Assets.xcassets */,
+				3105P800 /* Patches */,
 			);
 			path = ExternalNoelx;
 			sourceTree = "<group>";
@@ -361,6 +364,7 @@
 			files = (
 				3105A211,
 				3105A228,
+				3105P900,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
