@@ -31,16 +31,39 @@ struct ExternalNoelxApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if !licenseManager.isActive {
-                    // 1. Belum login / lisensi tidak aktif
+                switch licenseManager.state {
+                case .checking:
+                    // Splash / loading
+                    ZStack {
+                        AnimatedHyperBackdrop()
+                            .ignoresSafeArea()
+                        VStack(spacing: 20) {
+                            ProgressView()
+                                .tint(.white)
+                                .scaleEffect(1.3)
+                            Text("Verifying license…")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                    }
+
+                case .maintenance:
+                    MaintenanceView(manager: licenseManager)
+
+                case .inactive:
                     LicenseActivationView(manager: licenseManager)
-                } else if selectedTarget.isEmpty {
-                    // 2. Udah login, belum pilih target
-                    TargetSelectionView(selectedTarget: $selectedTarget)
-                } else {
-                    // 3. Udah login + pilih target
-                    ContentView()
-                        .environmentObject(licenseManager)
+
+                case .active:
+                    if selectedTarget.isEmpty {
+                        TargetSelectionView(selectedTarget: $selectedTarget)
+                    } else {
+                        ContentView()
+                            .environmentObject(licenseManager)
+                    }
+
+                case .offline:
+                    // Fallback — tetap pakai license activation
+                    LicenseActivationView(manager: licenseManager)
                 }
             }
             .environmentObject(appState)
@@ -67,7 +90,7 @@ struct ExternalNoelxApp: App {
             }
             .onChange(of: scenePhase) { phase in
                 guard phase == .active else { return }
-                // Re-verify saat app kembali ke foreground
+                // Re-verify saat kembali ke foreground
                 licenseManager.beginLaunchSession()
                 appState.detectSupport()
             }
@@ -79,8 +102,7 @@ struct ExternalNoelxApp: App {
     }
 }
 
-// MARK: - AppState (tidak berubah)
-
+// MARK: - AppState
 class AppState: ObservableObject {
     @Published var exploitStatus: ExploitStatus = .notStarted
     @Published var unsupportedMessage: String?
