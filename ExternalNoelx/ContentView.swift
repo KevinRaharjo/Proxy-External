@@ -5,6 +5,7 @@ import AVFoundation
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var licenseManager: LicenseManager
     @State private var showSettings = false
     @State private var showCleaner = false
     @StateObject private var patchStore = PatchProjectStore()
@@ -71,7 +72,7 @@ struct ContentView: View {
     private var brandHeader: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("External NIXX")
+                Text("External Nixx")
                     .font(.system(size: 25, weight: .black, design: .rounded))
                     .tracking(3)
                     .foregroundStyle(.white)
@@ -103,6 +104,7 @@ struct ContentView: View {
             panelTitle("DEVICE STATUS", icon: "shield.lefthalf.filled")
             statusRow(icon: "apple.logo", title: "iOS", value: AppInfo.osVersion, color: AppTheme.secondaryAccent)
             statusRow(icon: "iphone", title: "Device", value: AppInfo.displayMachineName, color: AppTheme.secondaryAccent)
+            statusRow(icon: "checkmark.seal.fill", title: "License", value: licenseManager.isActive ? "ACTIVE" : "INACTIVE", color: licenseManager.isActive ? .green : .red)
             statusRow(icon: "checkmark.seal.fill", title: "Support", value: appState.isSupported ? "SUPPORTED" : "UNSUPPORTED", color: appState.isSupported ? .green : .red)
         }
         .padding(16)
@@ -128,7 +130,7 @@ struct ContentView: View {
                     Text("No patches found")
                         .font(.headline)
                         .foregroundColor(.gray)
-                    Text("Add .3105 files to Patches/\(selectedTarget == "freefiremax" ? "FF Max" : "FF Normal")/")
+                    Text("Add .nixx files to Patches/\(selectedTarget == "freefiremax" ? "FF Max" : "FF Normal")/")
                         .font(.caption)
                         .foregroundColor(.gray.opacity(0.7))
                         .multilineTextAlignment(.center)
@@ -161,7 +163,7 @@ struct ContentView: View {
 
     private func dynamicPatchCard(item: PatchLibraryItem) -> some View {
         let isEnabled = DevicePatchService.latestReceipt(projectID: item.id) != nil
-        
+
         return PatchOptionCard(
             name: item.displayName,
             target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL",
@@ -236,7 +238,7 @@ struct ContentView: View {
                 .tracking(1.2)
                 .foregroundStyle(.white.opacity(0.72))
             Spacer()
-            Text("External NIXX • PRONTO")
+            Text("External Nixx • PRONTO")
                 .font(.system(size: 9, weight: .bold, design: .rounded))
                 .foregroundStyle(AppTheme.accent.opacity(0.8))
         }
@@ -248,7 +250,7 @@ struct ContentView: View {
 
     private var developerCredits: some View {
         VStack(spacing: 10) {
-            Text("Developed by NIXX")
+            Text("Developed by Kevin")
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.72))
                 .multilineTextAlignment(.center)
@@ -258,7 +260,7 @@ struct ContentView: View {
                 .foregroundStyle(AppTheme.secondaryAccent.opacity(0.85))
 
             HStack(spacing: 10) {
-                channelButton(title: "External NIXX Telegram", url: "https://t.me/Yahah22")
+                channelButton(title: "External Nixx Telegram", url: "https://t.me/nixxtime")
             }
         }
         .frame(maxWidth: .infinity)
@@ -307,13 +309,13 @@ struct ContentView: View {
 
     private func togglePatch(item: PatchLibraryItem, currentlyEnabled: Bool) {
         guard !patchOperationBusy else { return }
-        
+
         patchOperationBusy = true
         patchMessage = currentlyEnabled ? "RESTORING — \(item.displayName)" : "APPLYING — \(item.displayName)"
-        
+
         let project = item.project
         let projectID = item.id
-        
+
         DispatchQueue.global(qos: .userInitiated).async {
             let result: PatchActionResult
             do {
@@ -344,7 +346,7 @@ struct ContentView: View {
             } catch {
                 result = .unavailable("FAILED — \(String(describing: error))")
             }
-            
+
             DispatchQueue.main.async {
                 switch result {
                 case .applied:
@@ -463,7 +465,7 @@ private struct PatchUnlockPrompt: View {
                             .foregroundStyle(.red)
                     }
                 } footer: {
-                    Text("Enter the password once to unlock this External NIXX package on this device.")
+                    Text("Enter the password once to unlock this External Nixx package on this device.")
                 }
             }
             .navigationTitle("Unlock package")
