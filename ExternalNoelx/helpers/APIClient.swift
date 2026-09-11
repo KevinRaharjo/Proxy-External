@@ -45,12 +45,12 @@ enum APIClientError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidURL: return "Konfigurasi server tidak valid."
-        case .networkUnreachable: return "Server tidak dapat dijangkau. Periksa koneksi internet."
+        case .invalidURL: return "Invalid server configuration."
+        case .networkUnreachable: return "Server unreachable. Check your internet connection."
         case .serverError(let code): return "Server error (\(code))."
-        case .decodingFailed: return "Respon server tidak valid."
+        case .decodingFailed: return "Invalid server response."
         case .maintenance(let message): return message
-        case .unknown: return "Terjadi kesalahan tidak dikenal."
+        case .unknown: return "An unknown error occurred."
         }
     }
 }
@@ -60,7 +60,7 @@ enum APIClientError: Error, LocalizedError {
 actor APIClient {
     static let shared = APIClient()
 
-    // ⚠️ GANTI DENGAN DOMAIN VPS KAMU
+    // ⚠️ CHANGE THIS TO YOUR VPS DOMAIN
     private let baseURL = URL(string: "https://api.nixxtime.com")!
 
     private let session: URLSession
@@ -86,7 +86,7 @@ actor APIClient {
 
     // MARK: - Public Endpoints
 
-    /// Aktifkan key baru + bind ke device.
+    /// Activate new key + bind to device.
     func activate(
         key: String,
         device: LicenseDeviceInfo
@@ -101,7 +101,7 @@ actor APIClient {
         return try await post(path: "/api/v1/activate", body: body)
     }
 
-    /// Verifikasi session token yang sudah tersimpan.
+    /// Verify a stored session token.
     func verify(
         token: String,
         deviceID: String
@@ -113,7 +113,7 @@ actor APIClient {
         return try await post(path: "/api/v1/verify", body: body)
     }
 
-    /// Unbind device dari key (logout / pindah device).
+    /// Unbind device from key (logout / switch device).
     func deactivate(
         token: String,
         deviceID: String
@@ -125,12 +125,22 @@ actor APIClient {
         return try await post(path: "/api/v1/deactivate", body: body)
     }
 
-    /// Cek status server — maintenance atau tidak.
+    /// Check server status — maintenance or not.
+    /// This endpoint is safe to call when maintenance is active (returns 200).
     func status() async throws -> ServerStatusResponse {
         var request = URLRequest(url: baseURL.appendingPathComponent("/api/v1/status"))
         request.httpMethod = "GET"
+        request.setValue("NixxTime-iOS/1.0", forHTTPHeaderField: "User-Agent")
+
         let (data, response) = try await session.data(for: request)
-        try validate(response: response, data: data)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.networkUnreachable
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw APIClientError.serverError(httpResponse.statusCode)
+        }
+
         do {
             return try decoder.decode(ServerStatusResponse.self, from: data)
         } catch {
@@ -151,31 +161,28 @@ actor APIClient {
         request.httpBody = try encoder.encode(body)
 
         let (data, response) = try await session.data(for: request)
-        try validate(response: response, data: data)
 
-        // Cek maintenance khusus untuk endpoint activate/verify
-        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 503 {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.networkUnreachable
+        }
+
+        // Handle 503 maintenance specifically
+        if httpResponse.statusCode == 503 {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let errorMsg = json["error"] as? String {
                 throw APIClientError.maintenance(errorMsg)
             }
-            throw APIClientError.maintenance("Server sedang dalam maintenance.")
+            throw APIClientError.maintenance("Server is under maintenance.")
+        }
+
+        guard (200..<500).contains(httpResponse.statusCode) else {
+            throw APIClientError.serverError(httpResponse.statusCode)
         }
 
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
             throw APIClientError.decodingFailed
-        }
-    }
-
-    private func validate(response: URLResponse, data: Data) throws {
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIClientError.networkUnreachable
-        }
-        // 503 ditangani di atas; yang lain:
-        guard (200..<500).contains(httpResponse.statusCode) else {
-            throw APIClientError.serverError(httpResponse.statusCode)
         }
     }
 }
