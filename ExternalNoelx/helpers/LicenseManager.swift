@@ -27,9 +27,8 @@ final class LicenseManager: ObservableObject {
 
     // MARK: - Config
 
-    /// Support & contact channels (tampil di maintenance & activation view)
-    let supportWhatsApp = "https://wa.me/6283866914817"       // GANTI NOMOR WA KAMU
-    let supportTelegram = "https://t.me/Yahah22"              // GANTI USERNAME TELEGRAM KAMU
+    let supportWhatsApp = "https://wa.me/6281234567890"
+    let supportTelegram = "https://t.me/nixxtime"
 
     // MARK: - Storage
 
@@ -39,14 +38,15 @@ final class LicenseManager: ObservableObject {
         static let lastVerified = "com.nixxtime.last_verified"
         static let cachedExpiry = "com.nixxtime.cached_expiry"
         static let maintenanceMessage = "com.nixxtime.maintenance_message"
+        static let lastForegroundVerify = "com.nixxtime.last_foreground_verify"
     }
 
-    /// Grace period saat offline (24 jam).
     private let offlineGracePeriod: TimeInterval = 24 * 60 * 60
-    /// Rate limit local attempt (detik).
+    private let foregroundReverifyInterval: TimeInterval = 3600 // 1 jam
     private let minimumAttemptInterval: TimeInterval = 1.0
 
     private var lastAttemptAt: Date?
+    private var isVerifying = false
 
     // MARK: - Init
 
@@ -72,10 +72,37 @@ final class LicenseManager: ObservableObject {
         return nil
     }
 
+    // MARK: - Foreground Guard
+
+    /// Cek apakah perlu re-verify saat app masuk foreground.
+    /// Return true hanya kalau lisensi belum aktif ATAU sudah 1 jam sejak verify terakhir.
+    func shouldReverifyOnForeground() -> Bool {
+        // Kalau belum aktif (baru buka / logout) → selalu verify
+        if !isActive {
+            return true
+        }
+
+        // Kalau sedang verify → jangan verify lagi
+        if isVerifying {
+            return false
+        }
+
+        // Cek waktu verify terakhir
+        let last = UserDefaults.standard.object(forKey: StorageKeys.lastForegroundVerify) as? Date
+            ?? .distantPast
+        let elapsed = Date().timeIntervalSince(last)
+
+        if elapsed >= foregroundReverifyInterval {
+            UserDefaults.standard.set(Date(), forKey: StorageKeys.lastForegroundVerify)
+            return true
+        }
+
+        return false
+    }
+
     // MARK: - Launch
 
     func beginLaunchSession() {
-        // Kalau tidak ada token tersimpan → langsung inactive
         guard let token = UserDefaults.standard.string(forKey: StorageKeys.sessionToken),
               UserDefaults.standard.string(forKey: StorageKeys.licenseKey) != nil else {
             state = .inactive
@@ -83,13 +110,31 @@ final class LicenseManager: ObservableObject {
             return
         }
 
-        state = .checking
+        // Kalau sedang verify, jangan spawn task baru
+        if isVerifying {
+            return
+        }
+
+        // Kalau sudah active dan verify < 5 menit lalu, skip
+        if case .active = state,
+           let lastVerified = UserDefaults.standard.object(forKey: StorageKeys.lastVerified) as? Date,
+           Date().timeIntervalSince(lastVerified) < 300 {
+            return
+        }
+
+        // Kalau state bukan active, tampilkan loading
+        // Kalau sudah active, jangan set checking — verify di background saja
+        let wasActive = isActive
+
+        if !wasActive {
+            state = .checking
+        }
         isBusy = true
+        isVerifying = true
         message = "Verifying license…"
 
         Task {
             do {
-                // 1. Cek status server
                 let status = try await APIClient.shared.status()
 
                 if status.maintenance {
@@ -97,13 +142,13 @@ final class LicenseManager: ObservableObject {
                     UserDefaults.standard.set(msg, forKey: StorageKeys.maintenanceMessage)
                     await MainActor.run {
                         self.isBusy = false
+                        self.isVerifying = false
                         self.state = .maintenance(message: msg)
                         self.message = msg
                     }
                     return
                 }
 
-                // 2. Verify token
                 let response = try await APIClient.shared.verify(
                     token: token,
                     deviceID: deviceID
@@ -111,11 +156,13 @@ final class LicenseManager: ObservableObject {
 
                 await MainActor.run {
                     self.isBusy = false
+                    self.isVerifying = false
                     if response.success {
                         self.state = .active
                         self.expirationDate = response.expiresAt
                         self.message = "License active"
                         UserDefaults.standard.set(Date(), forKey: StorageKeys.lastVerified)
+                        UserDefaults.standard.set(Date(), forKey: StorageKeys.lastForegroundVerify)
                         if let expiry = response.expiresAt {
                             UserDefaults.standard.set(expiry, forKey: StorageKeys.cachedExpiry)
                         }
@@ -127,11 +174,15 @@ final class LicenseManager: ObservableObject {
                 }
             } catch let error as APIClientError {
                 await MainActor.run {
-                    self.handleMaintenanceOrOffline(error: error)
+                    self.isBusy = false
+                    self.isVerifying = false
+                    self.handleMaintenanceOrOffline(error: error, wasActive: wasActive)
                 }
             } catch {
                 await MainActor.run {
-                    self.handleMaintenanceOrOffline(error: APIClientError.networkUnreachable)
+                    self.isBusy = false
+                    self.isVerifying = false
+                    self.handleMaintenanceOrOffline(error: APIClientError.networkUnreachable, wasActive: wasActive)
                 }
             }
         }
@@ -143,7 +194,6 @@ final class LicenseManager: ObservableObject {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isBusy else { return }
 
-        // Rate limit
         if let last = lastAttemptAt, Date().timeIntervalSince(last) < minimumAttemptInterval {
             message = "Please wait a moment before trying again"
             return
@@ -178,6 +228,7 @@ final class LicenseManager: ObservableObject {
                             UserDefaults.standard.set(trimmed, forKey: StorageKeys.licenseKey)
                             UserDefaults.standard.set(token, forKey: StorageKeys.sessionToken)
                             UserDefaults.standard.set(Date(), forKey: StorageKeys.lastVerified)
+                            UserDefaults.standard.set(Date(), forKey: StorageKeys.lastForegroundVerify)
                             if let expiry = response.expiresAt {
                                 UserDefaults.standard.set(expiry, forKey: StorageKeys.cachedExpiry)
                             }
@@ -228,7 +279,7 @@ final class LicenseManager: ObservableObject {
                     deviceID: deviceID
                 )
             } catch {
-                log("license: deactivate failed offline, clearing local only")
+                // Ignore offline error
             }
             await MainActor.run {
                 self.clearSession()
@@ -268,12 +319,11 @@ final class LicenseManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: StorageKeys.sessionToken)
         UserDefaults.standard.removeObject(forKey: StorageKeys.lastVerified)
         UserDefaults.standard.removeObject(forKey: StorageKeys.cachedExpiry)
+        UserDefaults.standard.removeObject(forKey: StorageKeys.lastForegroundVerify)
         expirationDate = nil
     }
 
-    private func handleMaintenanceOrOffline(error: APIClientError) {
-        isBusy = false
-
+    private func handleMaintenanceOrOffline(error: APIClientError, wasActive: Bool) {
         // Cek maintenance
         if case .maintenance(let msg) = error {
             state = .maintenance(message: msg)
@@ -281,7 +331,14 @@ final class LicenseManager: ObservableObject {
             return
         }
 
-        // Offline fallback
+        // Kalau sebelumnya sudah active, jangan reset ke inactive — biarkan tetap active
+        if wasActive {
+            state = .active
+            message = "Offline mode"
+            return
+        }
+
+        // Cek grace period offline
         guard let lastVerified = UserDefaults.standard.object(forKey: StorageKeys.lastVerified) as? Date else {
             state = .inactive
             message = "Cannot verify license. Check your connection."
