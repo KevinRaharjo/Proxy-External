@@ -480,10 +480,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = "-lz";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.mobile.MobileHouseArrest";
-				PRODUCT_NAME = OGIOS;
+				PRODUCT_NAME = NixxTime;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "ExternalNoelx/ExternalNoelx-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
