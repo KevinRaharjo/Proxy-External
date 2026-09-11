@@ -19,7 +19,7 @@ struct LicenseActivationView: View {
                         VStack(spacing: 0) {
                             Spacer(minLength: 42)
 
-                            Text("External NIXX")
+                            Text("External Nixx")
                                 .font(.system(size: 30, weight: .black, design: .rounded))
                                 .tracking(1.4)
                                 .foregroundStyle(.white)
@@ -29,7 +29,7 @@ struct LicenseActivationView: View {
                                 .foregroundStyle(.white.opacity(0.55))
                                 .padding(.top, 5)
 
-                            Text("Package: External NIXX")
+                            Text("Package: External Nixx")
                                 .font(.system(size: 12, weight: .bold, design: .rounded))
                                 .foregroundStyle(AppTheme.secondaryAccent.opacity(0.9))
                                 .padding(.top, 8)
@@ -39,20 +39,20 @@ struct LicenseActivationView: View {
                                     Image(systemName: manager.isBusy ? "arrow.triangle.2.circlepath" : "key.fill")
                                         .foregroundStyle(AppTheme.secondaryAccent)
                                         .font(.system(size: 16, weight: .bold))
-                                    Text(manager.isBusy ? "Package initializing" : "Key required")
+                                    Text(manager.isBusy ? "Memverifikasi…" : "License Key")
                                         .font(.system(size: 16, weight: .black, design: .rounded))
                                         .foregroundStyle(.white)
                                     Spacer()
                                 }
 
-                                Text("Enter your External NIXX license key to continue")
+                                Text("Masukkan license key untuk mengaktifkan External Nixx di device ini")
                                     .font(.system(size: 13, weight: .medium, design: .rounded))
                                     .foregroundStyle(.white.opacity(0.68))
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                                TextField("License key", text: $key)
+                                TextField("NIXX-XXXX-XXXX-XXXX", text: $key)
                                     .focused($keyFocused)
-                                    .textInputAutocapitalization(.never)
+                                    .textInputAutocapitalization(.characters)
                                     .autocorrectionDisabled()
                                     .submitLabel(.done)
                                     .onSubmit { activate() }
@@ -64,7 +64,7 @@ struct LicenseActivationView: View {
                                     .overlay(RoundedRectangle(cornerRadius: 17, style: .continuous).stroke(AppTheme.accent.opacity(0.48), lineWidth: 1))
                                     .id("license-field")
 
-                                Toggle("Remember key on this device", isOn: $manager.rememberKey)
+                                Toggle("Ingat key di device ini", isOn: $manager.rememberKey)
                                     .font(.system(size: 12, weight: .bold, design: .rounded))
                                     .foregroundStyle(.white.opacity(0.72))
                                     .tint(AppTheme.accent)
@@ -72,7 +72,7 @@ struct LicenseActivationView: View {
                                 Button(action: activate) {
                                     HStack(spacing: 9) {
                                         Image(systemName: manager.isBusy ? "hourglass" : "checkmark.shield.fill")
-                                        Text(manager.isBusy ? "VERIFYING…" : "VERIFY AND CONTINUE")
+                                        Text(manager.isBusy ? "MEMVERIFIKASI…" : "AKTIFKAN")
                                     }
                                     .font(.system(size: 14, weight: .black, design: .rounded))
                                     .foregroundStyle(.white)
@@ -87,7 +87,7 @@ struct LicenseActivationView: View {
                                 if let message = manager.message {
                                     Text(message)
                                         .font(.system(size: 12, weight: .bold, design: .rounded))
-                                        .foregroundStyle(.red.opacity(0.95))
+                                        .foregroundStyle(manager.isActive ? .green : .red.opacity(0.95))
                                         .multilineTextAlignment(.center)
                                         .frame(maxWidth: .infinity)
                                         .padding(.horizontal, 14)
@@ -97,7 +97,7 @@ struct LicenseActivationView: View {
 
                                 if let contactOwner = manager.contactOwner,
                                    let contactURL = ownerURL(from: contactOwner) {
-                                    Button("Contact Owner…") {
+                                    Button("Hubungi Owner…") {
                                         UIApplication.shared.open(contactURL)
                                     }
                                     .font(.system(size: 13, weight: .bold, design: .rounded))
