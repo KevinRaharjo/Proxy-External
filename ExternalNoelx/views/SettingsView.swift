@@ -27,7 +27,6 @@ struct SettingsView: View {
                     .padding(.vertical, 4)
                 }
 
-                // 🔥 SECTION PILIH TARGET
                 Section {
                     Picker("Target Game", selection: $selectedTarget) {
                         Text("FF Normal").tag("freefireth")
@@ -69,7 +68,6 @@ struct SettingsView: View {
                     Text(language.text("settings.verified_versions"))
                 }
 
-                // MARK: - Reset Actions
                 Section {
                     Button {
                         showResetAlert = true
