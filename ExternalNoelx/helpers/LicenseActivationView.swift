@@ -39,13 +39,13 @@ struct LicenseActivationView: View {
                                     Image(systemName: manager.isBusy ? "arrow.triangle.2.circlepath" : "key.fill")
                                         .foregroundStyle(AppTheme.secondaryAccent)
                                         .font(.system(size: 16, weight: .bold))
-                                    Text(manager.isBusy ? "Memverifikasi…" : "License Key")
+                                    Text(manager.isBusy ? "Verifying…" : "License Key")
                                         .font(.system(size: 16, weight: .black, design: .rounded))
                                         .foregroundStyle(.white)
                                     Spacer()
                                 }
 
-                                Text("Masukkan license key untuk mengaktifkan External Nixx di device ini")
+                                Text("Enter your license key to activate External Nixx on this device")
                                     .font(.system(size: 13, weight: .medium, design: .rounded))
                                     .foregroundStyle(.white.opacity(0.68))
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -64,7 +64,7 @@ struct LicenseActivationView: View {
                                     .overlay(RoundedRectangle(cornerRadius: 17, style: .continuous).stroke(AppTheme.accent.opacity(0.48), lineWidth: 1))
                                     .id("license-field")
 
-                                Toggle("Ingat key di device ini", isOn: $manager.rememberKey)
+                                Toggle("Remember key on this device", isOn: $manager.rememberKey)
                                     .font(.system(size: 12, weight: .bold, design: .rounded))
                                     .foregroundStyle(.white.opacity(0.72))
                                     .tint(AppTheme.accent)
@@ -72,7 +72,7 @@ struct LicenseActivationView: View {
                                 Button(action: activate) {
                                     HStack(spacing: 9) {
                                         Image(systemName: manager.isBusy ? "hourglass" : "checkmark.shield.fill")
-                                        Text(manager.isBusy ? "MEMVERIFIKASI…" : "AKTIFKAN")
+                                        Text(manager.isBusy ? "VERIFYING…" : "ACTIVATE")
                                     }
                                     .font(.system(size: 14, weight: .black, design: .rounded))
                                     .foregroundStyle(.white)
@@ -87,23 +87,12 @@ struct LicenseActivationView: View {
                                 if let message = manager.message {
                                     Text(message)
                                         .font(.system(size: 12, weight: .bold, design: .rounded))
-                                        .foregroundStyle(manager.isActive ? .green : .red.opacity(0.95))
+                                        .foregroundStyle(messageColor(message))
                                         .multilineTextAlignment(.center)
                                         .frame(maxWidth: .infinity)
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 10)
                                         .background(Color.gray.opacity(0.20), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                }
-
-                                if let contactOwner = manager.contactOwner,
-                                   let contactURL = ownerURL(from: contactOwner) {
-                                    Button("Hubungi Owner…") {
-                                        UIApplication.shared.open(contactURL)
-                                    }
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .foregroundStyle(AppTheme.secondaryAccent)
-                                    .buttonStyle(.plain)
-                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                                 }
                             }
                             .padding(20)
@@ -113,6 +102,30 @@ struct LicenseActivationView: View {
                             .padding(.horizontal, 22)
                             .padding(.top, 26)
                             .id("activation-card")
+
+                            // Contact section
+                            VStack(spacing: 10) {
+                                Text("Need help? Contact us")
+                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.white.opacity(0.5))
+
+                                HStack(spacing: 10) {
+                                    contactChip(
+                                        title: "WhatsApp",
+                                        icon: "message.fill",
+                                        color: Color(red: 0.15, green: 0.83, blue: 0.38),
+                                        url: manager.supportWhatsApp
+                                    )
+                                    contactChip(
+                                        title: "Telegram",
+                                        icon: "paperplane.fill",
+                                        color: Color(red: 0.16, green: 0.63, blue: 0.87),
+                                        url: manager.supportTelegram
+                                    )
+                                }
+                            }
+                            .padding(.top, 24)
+                            .padding(.horizontal, 22)
 
                             Spacer(minLength: 42)
                         }
@@ -130,19 +143,44 @@ struct LicenseActivationView: View {
         .preferredColorScheme(.dark)
     }
 
+    // MARK: - Actions
+
     private func activate() {
         keyFocused = false
         manager.activate(key: key)
     }
 
-    private func ownerURL(from value: String) -> URL? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
-            return URL(string: trimmed)
+    // MARK: - Helpers
+
+    private func contactChip(title: String, icon: String, color: Color, url: String) -> some View {
+        Button {
+            guard let destination = URL(string: url) else { return }
+            UIApplication.shared.open(destination)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(color)
+                Text(title)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.black.opacity(0.4), in: Capsule())
+            .overlay(Capsule().stroke(color.opacity(0.4), lineWidth: 1))
         }
-        if trimmed.hasPrefix("@") {
-            return URL(string: "https://t.me/" + String(trimmed.dropFirst()))
+        .buttonStyle(.plain)
+    }
+
+    private func messageColor(_ text: String) -> Color {
+        let lower = text.lowercased()
+        if lower.contains("activated") || lower.contains("active") || lower.contains("success") {
+            return .green
         }
-        return URL(string: "https://t.me/" + trimmed)
+        if lower.contains("maintenance") || lower.contains("offline") {
+            return .orange
+        }
+        return .red.opacity(0.95)
     }
 }
