@@ -55,7 +55,7 @@ struct SettingsView: View {
                     LabeledContent(language.text("dashboard.hardware_model"), value: AppInfo.displayMachineName)
                     LabeledContent(language.text("settings.ios_version"), value: "\(AppInfo.osVersion) (\(AppInfo.osBuild))")
                     LabeledContent("Device ID") {
-                        Text(String(licenseManager.deviceID.prefix(16)) + "…")
+                        Text(shortDeviceID)
                             .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
                     }
@@ -169,11 +169,19 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Computed Properties
+
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "AppReleaseDisplayVersion") as? String
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
             ?? "1.0"
     }
+
+    private var shortDeviceID: String {
+        String(licenseManager.deviceID.prefix(16)) + "…"
+    }
+
+    // MARK: - Actions
 
     private func performResetPatches() {
         do {
