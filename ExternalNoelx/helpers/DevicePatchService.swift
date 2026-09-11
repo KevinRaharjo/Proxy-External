@@ -1,53 +1,9 @@
-// ✅ BENAR - DevicePatchService.swift
 import Foundation
 
 enum DevicePatchService {
     private static let fileManager = FileManager.default
     
-    // MARK: - Backup & Restore
-    
-    static func backupOriginalFile(at path: String) throws -> URL {
-        let backupRoot = try PatchProjectLibrary.backupRootURL()
-        let backupDir = backupRoot.appendingPathComponent("originals", isDirectory: true)
-        try fileManager.createDirectory(at: backupDir, withIntermediateDirectories: true)
-        
-        let fileName = (path as NSString).lastPathComponent
-        let backupPath = backupDir.appendingPathComponent("\(fileName).backup")
-        
-        if fileManager.fileExists(atPath: path) {
-            if fileManager.fileExists(atPath: backupPath.path) {
-                try fileManager.removeItem(at: backupPath)
-            }
-            try fileManager.copyItem(atPath: path, toPath: backupPath.path)
-            print("✅ Backup created: \(backupPath.path)")
-        }
-        return backupPath
-    }
-    
-    static func restoreOriginalFile(from backupPath: URL, to targetPath: String) throws {
-        guard fileManager.fileExists(atPath: backupPath.path) else {
-            print("⚠️ Backup file not found: \(backupPath.path)")
-            return
-        }
-        
-        if fileManager.fileExists(atPath: targetPath) {
-            try fileManager.removeItem(atPath: targetPath)
-        }
-        
-        try fileManager.copyItem(atPath: backupPath.path, toPath: targetPath)
-        print("✅ Restored: \(targetPath)")
-    }
-    
-    static func restoreOriginalFile(for projectID: UUID, filePath: String) throws {
-        let backupRoot = try PatchProjectLibrary.backupRootURL()
-        let backupDir = backupRoot.appendingPathComponent("originals", isDirectory: true)
-        let fileName = (filePath as NSString).lastPathComponent
-        let backupPath = backupDir.appendingPathComponent("\(fileName).backup")
-        
-        try restoreOriginalFile(from: backupPath, to: filePath)
-    }
-    
-    // MARK: - Apply Patch dengan Backup
+    // MARK: - Apply Patch
     
     static func apply(project: PatchProject) throws -> PatchTransactionReceipt {
         let bundleIDs = orderedBundleIdentifiers(in: project)
@@ -59,11 +15,11 @@ enum DevicePatchService {
                 let targetPath = root.appendingPathComponent(rule.relativePath).path
                 
                 if fileManager.fileExists(atPath: targetPath) {
-                    try backupOriginalFile(at: targetPath)
+                    _ = try backupFile(at: targetPath, for: project.id)
                 }
             }
             
-            // Apply patch
+            // Apply patch pakai PatchTransaction
             let receipt = try PatchTransaction.apply(
                 project: project,
                 backupRoot: try PatchProjectLibrary.backupRootURL(),
@@ -75,67 +31,137 @@ enum DevicePatchService {
                 }
             )
             
-            // Simpan receipt untuk restore nanti
             saveReceipt(receipt)
             return receipt
         }
     }
     
-    // MARK: - Restore Patch (Otomatis)
+    // MARK: - Restore Patch (ANTI-ERROR)
     
     static func restore(receipt: PatchTransactionReceipt) throws {
-        // Restore original files
-        let bundleIDs = try PatchTransaction.requiredBundleIdentifiers(for: receipt)
-        try withResolvedContainers(bundleIDs: bundleIDs) { roots in
-            // Coba restore dari backup
-            for (bundleID, root) in roots {
-                let backupRoot = try PatchProjectLibrary.backupRootURL()
-                let backupDir = backupRoot.appendingPathComponent("originals", isDirectory: true)
-                let backupFiles = try fileManager.contentsOfDirectory(at: backupDir, includingPropertiesForKeys: nil)
-                
-                for backupFile in backupFiles {
-                    let fileName = backupFile.deletingPathExtension().lastPathComponent
-                    let targetPath = root.appendingPathComponent(fileName).path
+        do {
+            let bundleIDs = try PatchTransaction.requiredBundleIdentifiers(for: receipt)
+            
+            try withResolvedContainers(bundleIDs: bundleIDs) { roots in
+                // Coba restore dari backup
+                for (bundleID, root) in roots {
+                    let backupDir = try backupDirURL(for: receipt.projectID)
                     
-                    if fileManager.fileExists(atPath: targetPath) {
-                        try restoreOriginalFile(from: backupFile, to: targetPath)
+                    if fileManager.fileExists(atPath: backupDir.path) {
+                        let backupFiles = try fileManager.contentsOfDirectory(
+                            at: backupDir,
+                            includingPropertiesForKeys: nil
+                        )
+                        
+                        for backupFile in backupFiles {
+                            let originalName = backupFile.deletingPathExtension().lastPathComponent
+                            
+                            // Cari file target di container
+                            let targetPath = findTargetPath(
+                                for: originalName,
+                                in: root,
+                                projectID: receipt.projectID
+                            )
+                            
+                            if let targetPath = targetPath {
+                                try restoreFile(from: backupFile, to: targetPath)
+                            }
+                        }
                     }
                 }
+                
+                // Jalankan PatchTransaction.restore juga
+                try? PatchTransaction.restore(
+                    receipt: receipt,
+                    containerResolver: { bundleID in
+                        guard let root = roots[bundleID] else {
+                            throw PatchPackageError.targetAppUnavailable(bundleID)
+                        }
+                        return root
+                    }
+                )
             }
             
-            // Hapus backup setelah restore
-            let backupRoot = try PatchProjectLibrary.backupRootURL()
-            let backupDir = backupRoot.appendingPathComponent("originals", isDirectory: true)
-            try? fileManager.removeItem(at: backupDir)
-            
-            // Hapus receipt
+            // Hapus backup & receipt
+            try? fileManager.removeItem(at: try backupDirURL(for: receipt.projectID))
             removeReceipt(projectID: receipt.projectID)
+            
+        } catch {
+            // Kalo restore gagal, tetap hapus receipt biar gak nyangkut
+            print("⚠️ Restore failed: \(error)")
+            removeReceipt(projectID: receipt.projectID)
+            throw error
         }
-        
-        // Juga jalankan PatchTransaction.restore
-        try PatchTransaction.restore(
-            receipt: receipt,
-            containerResolver: { bundleID in
-                guard let root = roots[bundleID] else {
-                    throw PatchPackageError.targetAppUnavailable(bundleID)
-                }
-                return root
-            }
-        )
     }
     
-    // MARK: - Reset All Patches (Bersihin semua)
+    // MARK: - Backup Helpers
+    
+    private static func backupDirURL(for projectID: UUID) throws -> URL {
+        let backupRoot = try PatchProjectLibrary.backupRootURL()
+        let backupDir = backupRoot.appendingPathComponent(projectID.uuidString, isDirectory: true)
+        try fileManager.createDirectory(at: backupDir, withIntermediateDirectories: true)
+        return backupDir
+    }
+    
+    private static func backupFile(at path: String, for projectID: UUID) throws -> URL {
+        let backupDir = try backupDirURL(for: projectID)
+        let fileName = (path as NSString).lastPathComponent
+        let backupPath = backupDir.appendingPathComponent("\(fileName).backup")
+        
+        if fileManager.fileExists(atPath: backupPath.path) {
+            try? fileManager.removeItem(at: backupPath)
+        }
+        
+        try fileManager.copyItem(atPath: path, toPath: backupPath.path)
+        print("✅ Backup: \(fileName)")
+        return backupPath
+    }
+    
+    private static func restoreFile(from backupPath: URL, to targetPath: String) throws {
+        if fileManager.fileExists(atPath: targetPath) {
+            try? fileManager.removeItem(atPath: targetPath)
+        }
+        try fileManager.copyItem(atPath: backupPath.path, toPath: targetPath)
+        print("✅ Restored: \((targetPath as NSString).lastPathComponent)")
+    }
+    
+    private static func findTargetPath(for fileName: String, in root: URL, projectID: UUID) -> String? {
+        // Cari file di container root
+        let directPath = root.appendingPathComponent(fileName).path
+        if fileManager.fileExists(atPath: directPath) {
+            return directPath
+        }
+        
+        // Cari di subfolder umum
+        let commonPaths = [
+            "Documents/\(fileName)",
+            "Library/Caches/\(fileName)",
+            "Library/Application Support/\(fileName)",
+            "tmp/\(fileName)"
+        ]
+        
+        for relativePath in commonPaths {
+            let fullPath = root.appendingPathComponent(relativePath).path
+            if fileManager.fileExists(atPath: fullPath) {
+                return fullPath
+            }
+        }
+        
+        return nil
+    }
+    
+    // MARK: - Reset All
     
     static func resetAllPatches() throws {
-        // Hapus semua backup
         let backupRoot = try PatchProjectLibrary.backupRootURL()
-        let backupDir = backupRoot.appendingPathComponent("originals", isDirectory: true)
-        try? fileManager.removeItem(at: backupDir)
+        try? fileManager.removeItem(at: backupRoot)
         
-        // Hapus semua receipt
-        let receipts = try fileManager.contentsOfDirectory(at: backupRoot, includingPropertiesForKeys: nil)
-        for receipt in receipts {
-            try? fileManager.removeItem(at: receipt)
+        // Hapus semua receipt dari UserDefaults
+        let defaults = UserDefaults.standard
+        for key in defaults.dictionaryRepresentation().keys {
+            if key.hasPrefix("receipt_") {
+                defaults.removeObject(forKey: key)
+            }
         }
         
         print("✅ All patches reset")
@@ -161,6 +187,8 @@ enum DevicePatchService {
         UserDefaults.standard.removeObject(forKey: key)
     }
     
+    // MARK: - Container Helpers
+    
     private static func orderedBundleIdentifiers(in project: PatchProject) -> [String] {
         project.allBundleIdentifiers
     }
@@ -176,11 +204,10 @@ enum DevicePatchService {
                   ContainerStore.isApplicationContainerPath(path) else {
                 throw PatchPackageError.targetAppUnavailable(bundleID)
             }
-            roots[bundleID] = PatchPathValidator.canonicalFileURL(URL(fileURLWithPath: path, isDirectory: true))
+            roots[bundleID] = PatchPathValidator.canonicalFileURL(
+                URL(fileURLWithPath: path, isDirectory: true)
+            )
         }
         return try operation(roots)
     }
 }
-
-// MARK: - Receipt Codable
-extension PatchTransactionReceipt: Codable {}
