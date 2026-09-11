@@ -49,18 +49,33 @@ enum PatchProjectLibrary {
         bundle: Bundle = .main,
         fileManager: FileManager = .default
     ) {
-        guard let root = try? packageRootURL(fileManager: fileManager) else {
-            return
+        // 🔥 INSTALL SEMUA PATCH DARI BUNDLE (FF Normal + FF Max)
+        let targetFolders = ["FF Normal", "FF Max", "Patches"]
+        
+        for targetFolder in targetFolders {
+            installBundledPackages(from: targetFolder, bundle: bundle, fileManager: fileManager)
         }
-
+    }
+    
+    private static func installBundledPackages(
+        from subdirectory: String,
+        bundle: Bundle,
+        fileManager: FileManager
+    ) {
+        guard let root = try? packageRootURL(fileManager: fileManager) else { return }
+        
+        // Buat subfolder target
+        let targetRoot = root.appendingPathComponent(subdirectory, isDirectory: true)
+        try? fileManager.createDirectory(at: targetRoot, withIntermediateDirectories: true)
+        
         // Cari file .3105 di bundle
-        let nestedURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: "Patches") ?? []
+        let nestedURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: subdirectory) ?? []
         let flattenedURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: nil) ?? []
         var seen = Set<String>()
         let bundledURLs = (nestedURLs + flattenedURLs).filter { seen.insert($0.standardizedFileURL.path).inserted }
-
+        
         for sourceURL in bundledURLs {
-            let destinationURL = root.appendingPathComponent(sourceURL.lastPathComponent)
+            let destinationURL = targetRoot.appendingPathComponent(sourceURL.lastPathComponent)
             guard !fileManager.fileExists(atPath: destinationURL.path) else { continue }
             do {
                 let data = try Data(contentsOf: sourceURL, options: .mappedIfSafe)
@@ -72,16 +87,22 @@ enum PatchProjectLibrary {
         }
     }
 
-    static func load(fileManager: FileManager = .default) -> [PatchLibraryItem] {
-        guard let root = try? packageRootURL(fileManager: fileManager),
-              let urls = try? fileManager.contentsOfDirectory(
-                at: root,
-                includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
-                options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
-              ) else { return [] }
+    // 🔥 LOAD PATCH DENGAN FILTER TARGET
+    static func load(target: String = "FF Normal", fileManager: FileManager = .default) -> [PatchLibraryItem] {
+        guard let root = try? packageRootURL(fileManager: fileManager) else { return [] }
+        
+        // Cari folder target
+        let targetFolder = root.appendingPathComponent(target, isDirectory: true)
+        let searchURL = fileManager.fileExists(atPath: targetFolder.path) ? targetFolder : root
+        
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: searchURL,
+            includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+        ) else { return [] }
 
         var byID: [UUID: PatchLibraryItem] = [:]
-        for url in urls where url.pathExtension.lowercased() == "noelx" || url.pathExtension.lowercased() == "3105" {
+        for url in urls where url.pathExtension.lowercased() == "3105" {
             do {
                 let data = try readPackage(at: url)
                 let summary = try PatchPackageCodec.inspect(data)
@@ -151,10 +172,10 @@ enum PatchProjectLibrary {
         } else {
             let root = try packageRootURL(fileManager: fileManager)
             let baseName = sanitizedFilename(projectName)
-            var candidate = root.appendingPathComponent(baseName).appendingPathExtension("noelx")
+            var candidate = root.appendingPathComponent(baseName).appendingPathExtension("3105")
             var suffix = 2
             while fileManager.fileExists(atPath: candidate.path) {
-                candidate = root.appendingPathComponent("\(baseName)-\(suffix)").appendingPathExtension("noelx")
+                candidate = root.appendingPathComponent("\(baseName)-\(suffix)").appendingPathExtension("3105")
                 suffix += 1
             }
             destination = candidate
