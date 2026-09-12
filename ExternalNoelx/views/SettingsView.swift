@@ -58,7 +58,7 @@ struct SettingsView: View {
                     licenseManager.deactivate()
                 }
             } message: {
-                Text("Yakin mau hapus aktivasi dari device ini? Kamu bisa aktifkan ulang dengan key yang sama di device lain.")
+                Text("Are you sure you want to remove the activation from this device? You can re-activate with the same key on another device.")
             }
             .alert("Result", isPresented: $showResultAlert) {
                 Button("OK") {
@@ -99,7 +99,7 @@ struct SettingsView: View {
         } header: {
             Text("Target Game")
         } footer: {
-            Text("Pilih game yang mau di-patch. Patch akan di-load sesuai target.")
+            Text("Choose the game you want to patch. Patches will load based on the selected target.")
         }
     }
 
@@ -148,7 +148,7 @@ struct SettingsView: View {
         Section {
             licenseStatusRow
             if let expiry = licenseManager.expirationDate {
-                LabeledContent("Kadaluarsa") {
+                LabeledContent("Expires") {
                     Text(expiry, style: .date)
                         .foregroundStyle(.secondary)
                 }
@@ -162,7 +162,7 @@ struct SettingsView: View {
         } header: {
             Text("License")
         } footer: {
-            Text("Deactivate akan menghapus aktivasi dari device ini. Kamu bisa aktifkan ulang dengan key yang sama di device lain.")
+            Text("Deactivate will remove the activation from this device. You can re-activate with the same key on another device.")
         }
     }
 
@@ -173,7 +173,7 @@ struct SettingsView: View {
             Image(systemName: isActive ? "checkmark.seal.fill" : "xmark.seal.fill")
                 .foregroundStyle(isActive ? Color.green : Color.red)
                 .frame(width: 24)
-            Text(isActive ? "Aktif" : "Tidak Aktif")
+            Text(isActive ? "Active" : "Inactive")
                 .font(.subheadline.weight(.semibold))
             Spacer()
         }
