@@ -3,92 +3,105 @@ import SwiftUI
 struct MaintenanceView: View {
     @ObservedObject var manager: LicenseManager
     @State private var isRetrying = false
-    @State private var checkTimer: Timer?
     @State private var lastCheckedAt = Date()
     @State private var autoRetryCountdown = 30
     @State private var autoRetryTimer: Timer?
+    @State private var pulsePhase = false
 
     var body: some View {
         NavigationStack {
             ZStack {
                 AnimatedHyperBackdrop()
-                    .ignoresSafeArea()
 
-                Color.black.opacity(0.35)
-                    .ignoresSafeArea()
+                Color.black.opacity(0.35).ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
                         Spacer(minLength: 40)
 
-                        // Icon
+                        // ─── Icon with glow pulse ─────────────────────
                         ZStack {
                             Circle()
-                                .fill(Color.orange.opacity(0.15))
-                                .frame(width: 100, height: 100)
-                                .blur(radius: 20)
+                                .fill(AppTheme.accent.opacity(0.18))
+                                .frame(width: 120, height: 120)
+                                .blur(radius: 30)
+                                .scaleEffect(pulsePhase ? 1.15 : 0.95)
+
                             Circle()
-                                .fill(Color.orange.opacity(0.12))
-                                .frame(width: 88, height: 88)
+                                .fill(AppTheme.surfaceElevated)
+                                .frame(width: 96, height: 96)
+                                .overlay(
+                                    Circle()
+                                        .stroke(AppTheme.accent.opacity(0.55), lineWidth: 1.2)
+                                )
+                                .shadow(color: AppTheme.accentGlow, radius: 18)
+
                             Image(systemName: "wrench.and.screwdriver.fill")
-                                .font(.system(size: 40, weight: .bold))
-                                .foregroundStyle(.orange)
+                                .font(.system(size: 38, weight: .bold))
+                                .foregroundStyle(AppTheme.accentBright)
                         }
                         .padding(.top, 20)
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                                pulsePhase = true
+                            }
+                        }
 
-                        // Title
+                        // ─── Title ─────────────────────────────────────
                         VStack(spacing: 8) {
                             Text("Under Maintenance")
                                 .font(.system(size: 26, weight: .black, design: .rounded))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(AppTheme.silverGradient)
+                                .shadow(color: AppTheme.accentGlow, radius: 6)
                                 .multilineTextAlignment(.center)
 
                             Text("We'll be back shortly")
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.6))
+                                .foregroundStyle(AppTheme.silverDim)
                         }
 
-                        // Message card
-                        VStack(spacing: 14) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "info.circle.fill")
-                                    .foregroundStyle(.orange)
-                                    .font(.system(size: 16, weight: .bold))
-                                Text("Server Message")
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.white.opacity(0.75))
-                                Spacer()
+                        // ─── Message card ─────────────────────────────
+                        AppSurfaceCard(
+                            corner: AppTheme.cardCorner,
+                            glowColor: AppTheme.accent,
+                            glowActive: true
+                        ) {
+                            VStack(spacing: 14) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "info.circle.fill")
+                                        .foregroundStyle(AppTheme.accentBright)
+                                        .font(.system(size: 16, weight: .bold))
+                                    Text("Server Message")
+                                        .font(.system(size: 13, weight: .black, design: .rounded))
+                                        .tracking(0.8)
+                                        .foregroundStyle(AppTheme.silverDim)
+                                    Spacer()
+                                }
+
+                                Text(manager.maintenanceMessage ?? "Server is under maintenance. Please try again later.")
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundStyle(AppTheme.silver)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .multilineTextAlignment(.leading)
                             }
-
-                            Text(manager.maintenanceMessage ?? "Server is under maintenance. Please try again later.")
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.9))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .multilineTextAlignment(.leading)
                         }
-                        .padding(18)
-                        .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
-                        )
                         .padding(.horizontal, 22)
 
-                        // Last checked
+                        // ─── Last checked ─────────────────────────────
                         HStack(spacing: 6) {
                             Image(systemName: "clock")
-                                .font(.system(size: 11))
+                                .font(.system(size: 11, weight: .semibold))
                             Text("Last checked: \(timeAgo(from: lastCheckedAt))")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
                         }
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(AppTheme.silverMuted)
 
-                        // Retry button
+                        // ─── Retry button ─────────────────────────────
                         Button(action: retry) {
                             HStack(spacing: 10) {
                                 if isRetrying {
                                     ProgressView()
-                                        .tint(.white)
+                                        .tint(AppTheme.silverBright)
                                         .scaleEffect(0.9)
                                 } else {
                                     Image(systemName: "arrow.clockwise")
@@ -96,46 +109,44 @@ struct MaintenanceView: View {
                                 }
                                 Text(isRetrying ? "CHECKING…" : "TRY AGAIN")
                                     .font(.system(size: 14, weight: .black, design: .rounded))
+                                    .tracking(0.8)
                             }
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity, minHeight: 54)
-                            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
-                            .shadow(color: AppTheme.accent.opacity(0.35), radius: 14, y: 7)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(AppPrimaryButtonStyle(tint: AppTheme.accent, fullWidth: true))
                         .disabled(isRetrying)
                         .padding(.horizontal, 22)
+                        .glowPulse(active: !isRetrying, color: AppTheme.accent)
 
                         if autoRetryCountdown > 0 && !isRetrying {
                             Text("Auto-retry in \(autoRetryCountdown)s")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.4))
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .foregroundStyle(AppTheme.silverMuted)
                         }
 
-                        // Divider
+                        // ─── Divider ──────────────────────────────────
                         Rectangle()
-                            .fill(Color.white.opacity(0.08))
-                            .frame(height: 1)
+                            .fill(AppTheme.borderSubtle)
+                            .frame(height: 0.8)
                             .padding(.horizontal, 40)
-                            .padding(.top, 8)
+                            .padding(.top, 10)
 
-                        // Contact
-                        VStack(spacing: 12) {
+                        // ─── Contact ──────────────────────────────────
+                        VStack(spacing: 14) {
                             Text("Need help? Contact us")
                                 .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.5))
+                                .foregroundStyle(AppTheme.silverMuted)
 
                             HStack(spacing: 12) {
                                 contactButton(
                                     title: "WhatsApp",
                                     icon: "message.fill",
-                                    color: Color(red: 0.15, green: 0.83, blue: 0.38),
+                                    tint: AppTheme.success,
                                     url: manager.supportWhatsApp
                                 )
                                 contactButton(
                                     title: "Telegram",
                                     icon: "paperplane.fill",
-                                    color: Color(red: 0.16, green: 0.63, blue: 0.87),
+                                    tint: AppTheme.accentBright,
                                     url: manager.supportTelegram
                                 )
                             }
@@ -147,19 +158,15 @@ struct MaintenanceView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-        }
-        .preferredColorScheme(.dark)
-        .onAppear {
-            startAutoRetry()
-        }
-        .onDisappear {
-            stopAutoRetry()
+            .preferredColorScheme(.dark)
+            .onAppear { startAutoRetry() }
+            .onDisappear { stopAutoRetry() }
         }
     }
 
     // MARK: - Contact Button
 
-    private func contactButton(title: String, icon: String, color: Color, url: String) -> some View {
+    private func contactButton(title: String, icon: String, tint: Color, url: String) -> some View {
         Button {
             guard let destination = URL(string: url) else { return }
             UIApplication.shared.open(destination)
@@ -167,16 +174,19 @@ struct MaintenanceView: View {
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(color)
+                    .foregroundStyle(tint)
                 Text(title)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 13, weight: .black, design: .rounded))
+                    .foregroundStyle(AppTheme.silver)
             }
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .background(Color.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(AppTheme.surfaceElevated)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(color.opacity(0.4), lineWidth: 1)
+                    .stroke(tint.opacity(0.45), lineWidth: 0.8)
             )
         }
         .buttonStyle(.plain)
@@ -187,7 +197,6 @@ struct MaintenanceView: View {
     private func retry() {
         isRetrying = true
         manager.retry()
-        // Delay minimal biar ada feedback visual
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             isRetrying = false
             lastCheckedAt = Date()
