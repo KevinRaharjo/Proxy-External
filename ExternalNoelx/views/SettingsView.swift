@@ -25,66 +25,60 @@ struct SettingsView: View {
                 versionSupportSection
                 dangerZoneSection
             }
-            .tint(AppTheme.accent)
             .scrollContentBackground(.hidden)
-            .background(AppTheme.pageBackground)
+            .background(AppTheme.pageBackground.ignoresSafeArea())
             .navigationTitle(language.text("settings.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(language.text("common.done")) { dismiss() }
                         .fontWeight(.semibold)
+                        .foregroundStyle(AppTheme.accentBright)
                 }
             }
             .alert("Reset Patches", isPresented: $showResetAlert) {
                 Button("Cancel", role: .cancel) { }
-                Button("Reset", role: .destructive) {
-                    performResetPatches()
-                }
+                Button("Reset", role: .destructive) { performResetPatches() }
             } message: {
                 Text("This will remove all patch backups and reset patch states. Are you sure?")
             }
             .alert("Reset All Data", isPresented: $showRestartAlert) {
                 Button("Cancel", role: .cancel) { }
-                Button("Reset", role: .destructive) {
-                    performResetAllData()
-                }
+                Button("Reset", role: .destructive) { performResetAllData() }
             } message: {
                 Text("This will remove everything including license, patches, and all data. Are you sure?")
             }
             .alert("Deactivate License", isPresented: $showDeactivateAlert) {
                 Button("Cancel", role: .cancel) { }
-                Button("Deactivate", role: .destructive) {
-                    licenseManager.deactivate()
-                }
+                Button("Deactivate", role: .destructive) { licenseManager.deactivate() }
             } message: {
                 Text("Are you sure you want to remove the activation from this device? You can re-activate with the same key on another device.")
             }
             .alert("Result", isPresented: $showResultAlert) {
-                Button("OK") {
-                    resetMessage = ""
-                }
+                Button("OK") { resetMessage = "" }
             } message: {
                 Text(resetMessage)
             }
         }
     }
 
-    // MARK: - Sections
-
     @ViewBuilder
     private var appInfoSection: some View {
         Section {
             HStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 3) {
+                AppLogo(size: 46)
+                VStack(alignment: .leading, spacing: 4) {
                     Text("External Nixx")
-                        .font(.headline)
+                        .font(.system(size: 17, weight: .black, design: .rounded))
+                        .foregroundStyle(AppTheme.silver)
                     Text(language.text("common.version", appVersion))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.silverDim)
                 }
+                Spacer()
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 6)
+            .listRowBackground(AppTheme.surface)
         }
     }
 
@@ -96,10 +90,12 @@ struct SettingsView: View {
                 Text("FF Max").tag("freefiremax")
             }
             .pickerStyle(.segmented)
+            .listRowBackground(AppTheme.surface)
         } header: {
-            Text("Target Game")
+            Text("Target Game").foregroundStyle(AppTheme.accentBright)
         } footer: {
             Text("Choose the game you want to patch. Patches will load based on the selected target.")
+                .foregroundStyle(AppTheme.silverDim)
         }
     }
 
@@ -113,6 +109,7 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .listRowBackground(AppTheme.surface)
         }
     }
 
@@ -127,9 +124,7 @@ struct SettingsView: View {
                 language.text("settings.ios_version"),
                 value: "\(AppInfo.osVersion) (\(AppInfo.osBuild))"
             )
-            LabeledContent("Device ID") {
-                deviceIDText
-            }
+            LabeledContent("Device ID") { deviceIDText }
         }
     }
 
@@ -139,8 +134,8 @@ struct SettingsView: View {
         let shortID: String = String(rawID.prefix(16))
         let display: String = shortID + "..."
         Text(display)
-            .font(.caption.monospaced())
-            .foregroundStyle(.secondary)
+            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .foregroundStyle(AppTheme.silverDim)
     }
 
     @ViewBuilder
@@ -150,19 +145,20 @@ struct SettingsView: View {
             if let expiry = licenseManager.expirationDate {
                 LabeledContent("Expires") {
                     Text(expiry, style: .date)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.silverDim)
                 }
             }
             Button {
                 showDeactivateAlert = true
             } label: {
                 Label("Deactivate License", systemImage: "key.slash.fill")
-                    .foregroundColor(.orange)
+                    .foregroundStyle(AppTheme.warning)
             }
         } header: {
-            Text("License")
+            Text("License").foregroundStyle(AppTheme.accentBright)
         } footer: {
             Text("Deactivate will remove the activation from this device. You can re-activate with the same key on another device.")
+                .foregroundStyle(AppTheme.silverDim)
         }
     }
 
@@ -171,10 +167,11 @@ struct SettingsView: View {
         let isActive: Bool = licenseManager.isActive
         HStack {
             Image(systemName: isActive ? "checkmark.seal.fill" : "xmark.seal.fill")
-                .foregroundStyle(isActive ? Color.green : Color.red)
+                .foregroundStyle(isActive ? AppTheme.success : AppTheme.danger)
                 .frame(width: 24)
             Text(isActive ? "Active" : "Inactive")
-                .font(.subheadline.weight(.semibold))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.silver)
             Spacer()
         }
     }
@@ -191,7 +188,7 @@ struct SettingsView: View {
             LabeledContent("iOS 18", value: ExploitSupportPolicy.verifiedIOS18Range)
             LabeledContent("iOS 26", value: ExploitSupportPolicy.verifiedIOS26Range)
         } header: {
-            Text(language.text("settings.verified_versions"))
+            Text(language.text("settings.verified_versions")).foregroundStyle(AppTheme.accentBright)
         }
     }
 
@@ -199,9 +196,9 @@ struct SettingsView: View {
     private var supportStatusText: some View {
         let isSupported: Bool = appState.isSupported
         let key: String = isSupported ? "settings.supported" : "settings.unsupported"
-        let color: Color = isSupported ? Color.green : Color.red
         Text(language.text(key))
-            .foregroundStyle(color)
+            .fontWeight(.bold)
+            .foregroundStyle(isSupported ? AppTheme.success : AppTheme.danger)
     }
 
     @ViewBuilder
@@ -211,23 +208,21 @@ struct SettingsView: View {
                 showResetAlert = true
             } label: {
                 Label("Reset All Patches", systemImage: "trash.fill")
-                    .foregroundColor(.red)
+                    .foregroundStyle(AppTheme.danger)
             }
-
             Button {
                 showRestartAlert = true
             } label: {
                 Label("Reset All Data (Clean Install)", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundColor(.red)
+                    .foregroundStyle(AppTheme.danger)
             }
         } header: {
-            Text("Danger Zone")
+            Text("Danger Zone").foregroundStyle(AppTheme.danger)
         } footer: {
             Text("Reset All Patches will remove all patch backups and reset patch states.\nReset All Data will remove everything including license.")
+                .foregroundStyle(AppTheme.silverDim)
         }
     }
-
-    // MARK: - Computed Properties
 
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "AppReleaseDisplayVersion") as? String
@@ -235,19 +230,15 @@ struct SettingsView: View {
             ?? "1.0"
     }
 
-    // MARK: - Actions
-
     private func performResetPatches() {
         do {
             try DevicePatchService.resetAllPatches()
-
             UserDefaults.standard.removeObject(forKey: "aimDragEnabled")
             UserDefaults.standard.removeObject(forKey: "aimNeckEnabled")
             UserDefaults.standard.removeObject(forKey: "hspeitoffEnabled")
             UserDefaults.standard.removeObject(forKey: "aimBodyPackageEnabled")
             UserDefaults.standard.removeObject(forKey: "aimChestPackageEnabled")
             UserDefaults.standard.removeObject(forKey: "magicEnabled")
-
             resetMessage = "All patches reset successfully!"
             showResultAlert = true
         } catch {
@@ -259,24 +250,17 @@ struct SettingsView: View {
     private func performResetAllData() {
         do {
             try DevicePatchService.resetAllPatches()
-
             if let bundleID = Bundle.main.bundleIdentifier {
                 UserDefaults.standard.removePersistentDomain(forName: bundleID)
             }
             UserDefaults.standard.synchronize()
-
             let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
             try? FileManager.default.removeItem(at: documentsURL)
-
             let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             try? FileManager.default.removeItem(at: appSupportURL)
-
             resetMessage = "All data reset successfully! Please restart the app."
             showResultAlert = true
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                exit(0)
-            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { exit(0) }
         } catch {
             resetMessage = "Reset failed: \(error.localizedDescription)"
             showResultAlert = true
