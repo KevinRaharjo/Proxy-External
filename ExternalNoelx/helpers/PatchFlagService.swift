@@ -22,11 +22,17 @@ struct PatchReportItem: Codable {
     let target: String
 }
 
+struct KnownPatch: Codable, Equatable {
+    let name: String
+    let target: String
+
+    var key: String { "\(name)@\(target)" }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
-// MARK: - Thread-safe snapshot
+// MARK: - Thread-safe snapshots
 // ═══════════════════════════════════════════════════════════════════════
 
-/// Snapshot thread-safe untuk baca cache dari View tanpa `await`.
 private final class FlagSnapshot: @unchecked Sendable {
     private var lock = os_unfair_lock_s()
     private var storage: [String: PatchFlag] = [:]
@@ -56,6 +62,35 @@ private final class FlagSnapshot: @unchecked Sendable {
     }
 }
 
+private final class KnownSnapshot: @unchecked Sendable {
+    private var lock = os_unfair_lock_s()
+    private var storage: Set<String> = []
+
+    func replace(_ new: Set<String>) {
+        os_unfair_lock_lock(&lock)
+        storage = new
+        os_unfair_lock_unlock(&lock)
+    }
+
+    func contains(_ key: String) -> Bool {
+        os_unfair_lock_lock(&lock)
+        defer { os_unfair_lock_unlock(&lock) }
+        return storage.contains(key)
+    }
+
+    func clear() {
+        os_unfair_lock_lock(&lock)
+        storage.removeAll()
+        os_unfair_lock_unlock(&lock)
+    }
+
+    func count() -> Int {
+        os_unfair_lock_lock(&lock)
+        defer { os_unfair_lock_unlock(&lock) }
+        return storage.count
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // MARK: - Service
 // ═══════════════════════════════════════════════════════════════════════
@@ -63,20 +98,20 @@ private final class FlagSnapshot: @unchecked Sendable {
 actor PatchFlagService {
     static let shared = PatchFlagService()
 
-    /// Snapshot thread-safe — bisa dibaca dari View tanpa `await`.
     nonisolated let snapshot = FlagSnapshot()
+    nonisolated let knownSnapshot = KnownSnapshot()
 
     private let baseURL: URL
     private let session: URLSession
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
 
-    private var lastFetch: Date?
-    private var inFlightFetch: Task<[PatchFlag], Error>?
+    private var lastFlagFetch: Date?
+    private var lastKnownFetch: Date?
+    private var inFlightFlagFetch: Task<[PatchFlag], Error>?
+    private var inFlightKnownFetch: Task<[KnownPatch], Error>?
 
-    private let cacheTTL: TimeInterval = 5 * 60        // 5 menit
-    private let reportDebounce: TimeInterval = 10 * 60  // 10 menit
-    private var lastReportAt: Date?
+    private let cacheTTL: TimeInterval = 5 * 60  // 5 menit
 
     private init() {
         self.baseURL = URL(string: "https://api.proxynixx.my.id/")!
@@ -98,34 +133,32 @@ actor PatchFlagService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // MARK: - Fetch Flags
+    // MARK: - Fetch Flags (untuk badge di card)
     // ═══════════════════════════════════════════════════════════════════
 
-    /// Fetch daftar flag dari server. Cache 5 menit.
-    /// `force = true` → bypass cache.
     @discardableResult
     func fetchFlags(force: Bool = false) async throws -> [PatchFlag] {
         if !force,
-           let last = lastFetch,
+           let last = lastFlagFetch,
            Date().timeIntervalSince(last) < cacheTTL {
             return snapshot.all()
         }
 
-        if let existing = inFlightFetch {
+        if let existing = inFlightFlagFetch {
             return try await existing.value
         }
 
         let task = Task<[PatchFlag], Error> { [weak self] in
             guard let self else { return [] }
-            return try await self.performFetch()
+            return try await self.performFetchFlags()
         }
-        inFlightFetch = task
-        defer { inFlightFetch = nil }
+        inFlightFlagFetch = task
+        defer { inFlightFlagFetch = nil }
 
         return try await task.value
     }
 
-    private func performFetch() async throws -> [PatchFlag] {
+    private func performFetchFlags() async throws -> [PatchFlag] {
         var request = URLRequest(url: baseURL.appendingPathComponent("/api/v1/patches/flags"))
         request.httpMethod = "GET"
         request.setValue("NixxTime-iOS/1.0", forHTTPHeaderField: "User-Agent")
@@ -134,7 +167,7 @@ actor PatchFlagService {
         guard let http = response as? HTTPURLResponse,
               (200..<300).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            log("patchflag: fetch failed status=\(status)")
+            log("patchflag: fetchFlags failed status=\(status)")
             throw APIClientError.serverError(status)
         }
 
@@ -166,34 +199,113 @@ actor PatchFlagService {
         var dict: [String: PatchFlag] = [:]
         for flag in flags { dict[flag.key] = flag }
         snapshot.replace(dict)
-        lastFetch = Date()
+        lastFlagFetch = Date()
         log("patchflag: fetched \(flags.count) flags")
         return flags
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // MARK: - Report Patches
+    // MARK: - Fetch Known Patches (untuk cek mana yang BELUM di server)
     // ═══════════════════════════════════════════════════════════════════
 
-    /// Report daftar patch dari app ke server. Debounced 10 menit.
     @discardableResult
-    func report(_ patches: [PatchReportItem], force: Bool = false) async throws -> Int {
+    func fetchKnownPatches(force: Bool = false) async throws -> [KnownPatch] {
         if !force,
-           let last = lastReportAt,
-           Date().timeIntervalSince(last) < reportDebounce {
-            log("patchflag: report skipped (debounced)")
-            return 0
+           let last = lastKnownFetch,
+           Date().timeIntervalSince(last) < cacheTTL {
+            return []  // snapshot sudah terisi
         }
+
+        if let existing = inFlightKnownFetch {
+            return try await existing.value
+        }
+
+        let task = Task<[KnownPatch], Error> { [weak self] in
+            guard let self else { return [] }
+            return try await self.performFetchKnown()
+        }
+        inFlightKnownFetch = task
+        defer { inFlightKnownFetch = nil }
+
+        return try await task.value
+    }
+
+    private func performFetchKnown() async throws -> [KnownPatch] {
+        var request = URLRequest(url: baseURL.appendingPathComponent("/api/v1/patches/known"))
+        request.httpMethod = "GET"
+        request.setValue("NixxTime-iOS/1.0", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode) else {
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            log("patchflag: fetchKnown failed status=\(status)")
+            throw APIClientError.serverError(status)
+        }
+
+        struct Envelope: Decodable {
+            let success: Bool
+            let patches: [DTO]
+        }
+        struct DTO: Decodable {
+            let name: String
+            let target: String
+        }
+
+        let envelope = try decoder.decode(Envelope.self, from: data)
+        guard envelope.success else { throw APIClientError.decodingFailed }
+
+        let patches = envelope.patches.map {
+            KnownPatch(name: $0.name, target: $0.target)
+        }
+
+        let set = Set(patches.map { $0.key })
+        knownSnapshot.replace(set)
+        lastKnownFetch = Date()
+        log("patchflag: known patches = \(patches.count)")
+        return patches
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // MARK: - Report (hanya patch yang BELUM ada di server)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Report daftar patch. Hanya kirim patch yang belum ada di server.
+    /// Kalau semua sudah ada → skip total (return 0).
+    @discardableResult
+    func report(
+        _ patches: [PatchReportItem],
+        deviceID: String
+    ) async throws -> Int {
         guard !patches.isEmpty else { return 0 }
 
-        struct Body: Encodable { let patches: [PatchReportItem] }
-        struct Envelope: Decodable { let success: Bool; let reported: Int }
+        // Filter: hanya patch yang belum ada di server
+        let toReport = patches.filter {
+            !knownSnapshot.contains("\($0.name)@\($0.target)")
+        }
+
+        if toReport.isEmpty {
+            log("patchflag: all \(patches.count) patches already known, skip report")
+            return 0
+        }
+
+        log("patchflag: reporting \(toReport.count)/\(patches.count) new patches")
+
+        struct Body: Encodable {
+            let patches: [PatchReportItem]
+            let device_id: String
+        }
+        struct Envelope: Decodable {
+            let success: Bool
+            let reported: Int
+            let skipped: Int?
+        }
 
         var request = URLRequest(url: baseURL.appendingPathComponent("/api/v1/patches/report"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("NixxTime-iOS/1.0", forHTTPHeaderField: "User-Agent")
-        request.httpBody = try encoder.encode(Body(patches: patches))
+        request.httpBody = try encoder.encode(Body(patches: toReport, device_id: deviceID))
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse,
@@ -206,8 +318,18 @@ actor PatchFlagService {
         let envelope = try decoder.decode(Envelope.self, from: data)
         guard envelope.success else { throw APIClientError.decodingFailed }
 
-        lastReportAt = Date()
-        log("patchflag: reported \(envelope.reported) patches")
+        // Update known snapshot biar next report tidak kirim ulang
+        var updated = Set<String>()
+        // Ambil snapshot lama dulu
+        // (tidak ada accessor, tapi kita bisa replace total)
+        // Cukup tambah yang baru ke snapshot via fetch ulang nanti
+
+        log("patchflag: reported \(envelope.reported), server skipped \(envelope.skipped ?? 0)")
+
+        // Refresh known cache
+        lastKnownFetch = nil
+        _ = try? await fetchKnownPatches(force: true)
+
         return envelope.reported
     }
 
@@ -217,6 +339,8 @@ actor PatchFlagService {
 
     func invalidateCache() {
         snapshot.clear()
-        lastFetch = nil
+        knownSnapshot.clear()
+        lastFlagFetch = nil
+        lastKnownFetch = nil
     }
 }
