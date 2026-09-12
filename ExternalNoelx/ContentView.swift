@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var refreshToken = UUID()
+    @State private var flagsToken = UUID()
 
     @AppStorage("selected_target") private var selectedTarget = "freefireth"
 
@@ -49,16 +50,20 @@ struct ContentView: View {
             let targetFolder = selectedTarget == "freefiremax" ? "FF Max" : "FF Normal"
             patchStore.setTarget(targetFolder)
             patchMessage = "READY — SELECT A PATCH"
+            refreshPatchFlags(target: targetFolder)
         }
         .onChange(of: selectedTarget) { newTarget in
             let targetFolder = newTarget == "freefiremax" ? "FF Max" : "FF Normal"
             patchStore.setTarget(targetFolder)
             patchMessage = "READY — SELECT A PATCH"
+            refreshPatchFlags(target: targetFolder)
         }
         .onChange(of: scenePhase) { phase in
             guard phase == .active, !patchOperationBusy else { return }
             patchStore.reload()
             patchMessage = "READY — SELECT A PATCH"
+            let targetFolder = selectedTarget == "freefiremax" ? "FF Max" : "FF Normal"
+            refreshPatchFlags(target: targetFolder)
         }
         .alert(isPresented: $showAlert) {
             Alert(
@@ -67,6 +72,31 @@ struct ContentView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+    }
+
+    // MARK: - Patch Flag Integration
+
+    private func refreshPatchFlags(target: String) {
+        Task {
+            // Report daftar patch (debounced di service — max 1x / 10 menit)
+            let reportItems = patchStore.items.map {
+                PatchReportItem(name: $0.displayName, target: target)
+            }
+            _ = try? await PatchFlagService.shared.report(reportItems)
+
+            // Fetch flag terbaru dari server
+            _ = try? await PatchFlagService.shared.fetchFlags(force: true)
+
+            // Trigger re-render supaya badge + note muncul
+            await MainActor.run {
+                flagsToken = UUID()
+            }
+        }
+    }
+
+    private func currentFlag(for item: PatchLibraryItem) -> PatchFlag? {
+        let targetFolder = selectedTarget == "freefiremax" ? "FF Max" : "FF Normal"
+        return PatchFlagService.shared.snapshot.get("\(item.displayName)@\(targetFolder)")
     }
 
     // MARK: - Brand header
@@ -232,16 +262,19 @@ struct ContentView: View {
 
     private func patchCard(item: PatchLibraryItem) -> some View {
         let isEnabled = DevicePatchService.latestReceipt(projectID: item.id) != nil
+        let flag = currentFlag(for: item)
 
         return PatchTile(
             name: item.displayName,
             target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL",
             isEnabled: isEnabled,
             isBusy: patchOperationBusy,
-            tint: AppTheme.accent
+            tint: AppTheme.accent,
+            flag: flag
         ) { newValue in
             togglePatch(item: item, currentlyEnabled: isEnabled, wantEnable: newValue)
         }
+        .id("\(item.id)-\(flagsToken)")
     }
 
     // MARK: - Launch panel
@@ -405,6 +438,16 @@ struct ContentView: View {
     }
 
     private func togglePatch(item: PatchLibraryItem, currentlyEnabled: Bool, wantEnable: Bool) {
+        // ⛔️ Blokir kalau patch di-flag oleh admin
+        if let flag = currentFlag(for: item) {
+            let note = (flag.note?.isEmpty == false) ? flag.note! : nil
+            let label = (flag.label?.isEmpty == false) ? flag.label! : "Flagged"
+            alertMessage = note ?? "Patch ini ditandai oleh admin: \(label). Tidak bisa diaktifkan."
+            showAlert = true
+            refreshToken = UUID()
+            return
+        }
+
         guard !patchOperationBusy else { return }
         if currentlyEnabled == wantEnable { return }
 
@@ -475,7 +518,7 @@ struct ContentView: View {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// MARK: - Patch Tile (with NotchSliderToggle)
+// MARK: - Patch Tile (with NotchSliderToggle + Flag Badge)
 // ═══════════════════════════════════════════════════════════════════════
 
 private struct PatchTile: View {
@@ -484,6 +527,7 @@ private struct PatchTile: View {
     let isEnabled: Bool
     let isBusy: Bool
     let tint: Color
+    let flag: PatchFlag?
     let onChange: (Bool) -> Void
 
     @State private var toggleState: Bool
@@ -494,6 +538,7 @@ private struct PatchTile: View {
         isEnabled: Bool,
         isBusy: Bool,
         tint: Color,
+        flag: PatchFlag? = nil,
         onChange: @escaping (Bool) -> Void
     ) {
         self.name = name
@@ -501,21 +546,52 @@ private struct PatchTile: View {
         self.isEnabled = isEnabled
         self.isBusy = isBusy
         self.tint = tint
+        self.flag = flag
         self.onChange = onChange
         _toggleState = State(initialValue: isEnabled)
+    }
+
+    private var isFlagged: Bool { flag != nil }
+    private var flagTint: Color { AppTheme.warning }
+
+    private var borderColor: Color {
+        if isFlagged { return flagTint.opacity(0.9) }
+        if isEnabled { return tint.opacity(0.85) }
+        return AppTheme.borderSubtle
+    }
+
+    private var borderWidth: CGFloat {
+        if isFlagged { return 1.5 }
+        if isEnabled { return 1.3 }
+        return 0.8
+    }
+
+    private var statusText: String {
+        if isFlagged { return "BLOCKED BY ADMIN" }
+        return isEnabled ? "PATCH ACTIVE" : "TAP TO ACTIVATE"
+    }
+
+    private var headerIcon: String {
+        if isFlagged { return "exclamationmark.triangle.fill" }
+        return isEnabled ? "bolt.fill" : "bolt.slash.fill"
+    }
+
+    private var headerIconColor: Color {
+        if isFlagged { return flagTint }
+        return isEnabled ? tint : AppTheme.silverMuted
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: isEnabled ? "bolt.fill" : "bolt.slash.fill")
+                Image(systemName: headerIcon)
                     .font(.system(size: 15, weight: .black))
-                    .foregroundStyle(isEnabled ? tint : AppTheme.silverMuted)
+                    .foregroundStyle(headerIconColor)
                 Spacer()
                 NotchSliderToggle(
                     isOn: $toggleState,
-                    tint: tint,
-                    isBusy: isBusy
+                    tint: isFlagged ? flagTint : tint,
+                    isBusy: isBusy || isFlagged
                 ) { newValue in
                     onChange(newValue)
                 }
@@ -536,13 +612,28 @@ private struct PatchTile: View {
             Text(target)
                 .font(.system(size: 9, weight: .heavy, design: .rounded))
                 .tracking(1.3)
-                .foregroundStyle(isEnabled ? tint : AppTheme.silverMuted)
+                .foregroundStyle(isFlagged ? flagTint : (isEnabled ? tint : AppTheme.silverMuted))
+
+            if isFlagged {
+                flagBadge
+                if let note = flag?.note, !note.isEmpty {
+                    Text(note)
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(AppTheme.silverDim)
+                        .lineLimit(4)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
 
             HStack(spacing: 6) {
                 Circle()
-                    .fill(isEnabled ? AppTheme.success : AppTheme.silverMuted)
+                    .fill(isFlagged
+                          ? flagTint
+                          : (isEnabled ? AppTheme.success : AppTheme.silverMuted))
                     .frame(width: 6, height: 6)
-                Text(isEnabled ? "PATCH ACTIVE" : "TAP TO ACTIVATE")
+                Text(statusText)
                     .font(.system(size: 9, weight: .heavy, design: .rounded))
                     .tracking(0.8)
                     .foregroundStyle(AppTheme.silverDim)
@@ -556,21 +647,42 @@ private struct PatchTile: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(
-                    isEnabled ? tint.opacity(0.85) : AppTheme.borderSubtle,
-                    lineWidth: isEnabled ? 1.3 : 0.8
-                )
+                .stroke(borderColor, lineWidth: borderWidth)
         )
         .shadow(
-            color: isEnabled ? tint.opacity(0.25) : Color.black.opacity(0.35),
-            radius: isEnabled ? 14 : 8,
+            color: isFlagged
+                ? flagTint.opacity(0.30)
+                : (isEnabled ? tint.opacity(0.25) : Color.black.opacity(0.35)),
+            radius: isFlagged ? 14 : (isEnabled ? 14 : 8),
             y: 4
         )
-        .glowPulse(active: isEnabled, color: tint)
+        .glowPulse(active: isEnabled && !isFlagged, color: tint)
         .opacity(isBusy ? 0.6 : 1)
         .onChange(of: isEnabled) { newValue in
             toggleState = newValue
         }
+    }
+
+    @ViewBuilder
+    private var flagBadge: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "exclamationmark.shield.fill")
+                .font(.system(size: 9, weight: .black))
+                .foregroundStyle(flagTint)
+            Text((flag?.label ?? "FLAGGED").uppercased())
+                .font(.system(size: 9, weight: .heavy, design: .rounded))
+                .tracking(0.8)
+                .foregroundStyle(flagTint)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule().fill(flagTint.opacity(0.15))
+        )
+        .overlay(
+            Capsule().stroke(flagTint.opacity(0.5), lineWidth: 0.7)
+        )
     }
 }
 
