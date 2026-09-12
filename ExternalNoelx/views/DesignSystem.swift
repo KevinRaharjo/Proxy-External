@@ -161,7 +161,7 @@ private struct BackdropOrbs: View {
             Circle()
                 .fill(AppTheme.accent.opacity(0.16))
                 .frame(width: 320, height: 320)
-                .blur(radius: 90)
+                .blur(radius: 55)
                 .offset(
                     x: phase ? size.width * 0.35 : -size.width * 0.35,
                     y: -size.height * 0.28
@@ -169,7 +169,7 @@ private struct BackdropOrbs: View {
             Circle()
                 .fill(AppTheme.accentBright.opacity(0.10))
                 .frame(width: 280, height: 280)
-                .blur(radius: 100)
+                .blur(radius: 65)
                 .offset(
                     x: phase ? -size.width * 0.30 : size.width * 0.30,
                     y: size.height * 0.30
@@ -177,7 +177,7 @@ private struct BackdropOrbs: View {
             Circle()
                 .fill(AppTheme.accentDeep.opacity(0.14))
                 .frame(width: 200, height: 200)
-                .blur(radius: 80)
+                .blur(radius: 50)
                 .offset(
                     x: phase ? size.width * 0.20 : -size.width * 0.20,
                     y: size.height * 0.05
@@ -190,7 +190,7 @@ private struct BackdropOrbs: View {
 
 private struct ParticleField: View {
     let phase: Bool
-    private let particles: [ParticleSeed] = ParticleSeed.spawn(count: 42)
+    private let particles: [ParticleSeed] = ParticleSeed.spawn(count: 25)
 
     var body: some View {
         GeometryReader { proxy in
