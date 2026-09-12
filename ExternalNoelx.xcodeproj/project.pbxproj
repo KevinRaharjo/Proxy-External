@@ -74,6 +74,7 @@
 		3105P900 /* Patches in Resources */ = {isa = PBXBuildFile; fileRef = 3105P800; };
 		3105N200 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105N100; };
 		3105N201 /* MaintenanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105N101; };
+		3105Q200 /* PatchFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105Q100; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -163,6 +164,7 @@
 		3105P800 /* Patches */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Patches; sourceTree = "<group>"; };
 		3105N100 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		3105N101 /* MaintenanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceView.swift; sourceTree = "<group>"; };
+		3105Q100 /* PatchFlagService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatchFlagService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -278,6 +280,7 @@
 				3105K100 /* LicenseManager.swift */,
 				3105K101 /* LicenseActivationView.swift */,
 				3105N100 /* APIClient.swift */,
+				3105Q100 /* PatchFlagService.swift */,
 				3105A106 /* AppIconHelper.m */,
 				3105A107 /* AppIconHelper.h */,
 				3105A202 /* KernelExploit.swift */,
@@ -445,6 +448,7 @@
 				3105I201,
 				3105N200,
 				3105N201,
+				3105Q200,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
