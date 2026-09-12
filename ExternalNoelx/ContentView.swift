@@ -78,16 +78,24 @@ struct ContentView: View {
 
     private func refreshPatchFlags(target: String) {
         Task {
-            // Report daftar patch (debounced di service — max 1x / 10 menit)
+            // 1. Fetch flag terbaru (untuk badge di card)
+            _ = try? await PatchFlagService.shared.fetchFlags(force: true)
+
+            // 2. Fetch daftar patch yang SUDAH ada di server
+            _ = try? await PatchFlagService.shared.fetchKnownPatches(force: true)
+
+            // 3. Report — service otomatis filter, hanya kirim yang BELUM ada
             let reportItems = patchStore.items.map {
                 PatchReportItem(name: $0.displayName, target: target)
             }
-            _ = try? await PatchFlagService.shared.report(reportItems)
+            if !reportItems.isEmpty {
+                _ = try? await PatchFlagService.shared.report(
+                    reportItems,
+                    deviceID: licenseManager.deviceID
+                )
+            }
 
-            // Fetch flag terbaru dari server
-            _ = try? await PatchFlagService.shared.fetchFlags(force: true)
-
-            // Trigger re-render supaya badge + note muncul
+            // 4. Trigger re-render supaya badge + note muncul
             await MainActor.run {
                 flagsToken = UUID()
             }
@@ -258,7 +266,7 @@ struct ContentView: View {
         .padding(.horizontal, 4)
     }
 
-    // MARK: - Patch Card (with Notch Slider)
+    // MARK: - Patch Card
 
     private func patchCard(item: PatchLibraryItem) -> some View {
         let isEnabled = DevicePatchService.latestReceipt(projectID: item.id) != nil
@@ -438,7 +446,6 @@ struct ContentView: View {
     }
 
     private func togglePatch(item: PatchLibraryItem, currentlyEnabled: Bool, wantEnable: Bool) {
-        // ⛔️ Blokir kalau patch di-flag oleh admin
         if let flag = currentFlag(for: item) {
             let note = (flag.note?.isEmpty == false) ? flag.note! : nil
             let label = (flag.label?.isEmpty == false) ? flag.label! : "Flagged"
