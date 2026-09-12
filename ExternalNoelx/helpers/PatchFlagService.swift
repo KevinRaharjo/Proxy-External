@@ -33,7 +33,7 @@ struct KnownPatch: Codable, Equatable {
 // MARK: - Thread-safe snapshots
 // ═══════════════════════════════════════════════════════════════════════
 
-private final class FlagSnapshot: @unchecked Sendable {
+final class FlagSnapshot: @unchecked Sendable {
     private var lock = os_unfair_lock_s()
     private var storage: [String: PatchFlag] = [:]
 
@@ -62,7 +62,7 @@ private final class FlagSnapshot: @unchecked Sendable {
     }
 }
 
-private final class KnownSnapshot: @unchecked Sendable {
+final class KnownSnapshot: @unchecked Sendable {
     private var lock = os_unfair_lock_s()
     private var storage: Set<String> = []
 
@@ -111,7 +111,7 @@ actor PatchFlagService {
     private var inFlightFlagFetch: Task<[PatchFlag], Error>?
     private var inFlightKnownFetch: Task<[KnownPatch], Error>?
 
-    private let cacheTTL: TimeInterval = 5 * 60  // 5 menit
+    private let cacheTTL: TimeInterval = 5 * 60
 
     private init() {
         self.baseURL = URL(string: "https://api.proxynixx.my.id/")!
@@ -133,7 +133,7 @@ actor PatchFlagService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // MARK: - Fetch Flags (untuk badge di card)
+    // MARK: - Fetch Flags
     // ═══════════════════════════════════════════════════════════════════
 
     @discardableResult
@@ -205,7 +205,7 @@ actor PatchFlagService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // MARK: - Fetch Known Patches (untuk cek mana yang BELUM di server)
+    // MARK: - Fetch Known Patches
     // ═══════════════════════════════════════════════════════════════════
 
     @discardableResult
@@ -213,7 +213,7 @@ actor PatchFlagService {
         if !force,
            let last = lastKnownFetch,
            Date().timeIntervalSince(last) < cacheTTL {
-            return []  // snapshot sudah terisi
+            return []
         }
 
         if let existing = inFlightKnownFetch {
@@ -267,11 +267,9 @@ actor PatchFlagService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // MARK: - Report (hanya patch yang BELUM ada di server)
+    // MARK: - Report
     // ═══════════════════════════════════════════════════════════════════
 
-    /// Report daftar patch. Hanya kirim patch yang belum ada di server.
-    /// Kalau semua sudah ada → skip total (return 0).
     @discardableResult
     func report(
         _ patches: [PatchReportItem],
@@ -279,7 +277,6 @@ actor PatchFlagService {
     ) async throws -> Int {
         guard !patches.isEmpty else { return 0 }
 
-        // Filter: hanya patch yang belum ada di server
         let toReport = patches.filter {
             !knownSnapshot.contains("\($0.name)@\($0.target)")
         }
@@ -318,15 +315,8 @@ actor PatchFlagService {
         let envelope = try decoder.decode(Envelope.self, from: data)
         guard envelope.success else { throw APIClientError.decodingFailed }
 
-        // Update known snapshot biar next report tidak kirim ulang
-        var updated = Set<String>()
-        // Ambil snapshot lama dulu
-        // (tidak ada accessor, tapi kita bisa replace total)
-        // Cukup tambah yang baru ke snapshot via fetch ulang nanti
-
         log("patchflag: reported \(envelope.reported), server skipped \(envelope.skipped ?? 0)")
 
-        // Refresh known cache
         lastKnownFetch = nil
         _ = try? await fetchKnownPatches(force: true)
 
