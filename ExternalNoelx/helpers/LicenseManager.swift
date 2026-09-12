@@ -361,7 +361,7 @@ final class LicenseManager: ObservableObject {
 
     private static func computeDeviceID() -> String {
         let idfv = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
-        let bundle = Bundle.main.bundleIdentifier ?? "com.kevin.nixxtime"
+        let bundle = Bundle.main.bundleIdentifier ?? "com.apple.mobile.MobileHouseArrest"
         let raw = "\(idfv)|\(bundle)"
         let hash = SHA256.hash(data: Data(raw.utf8))
         return hash.map { String(format: "%02x", $0) }.joined()
