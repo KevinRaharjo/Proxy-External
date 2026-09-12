@@ -9,7 +9,7 @@
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
-    <string>com.kevin.nixxtime</string>
+    <string>com.apple.mobile.MobileHouseArrest</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -72,7 +72,6 @@
         </dict>
     </array>
 
-    <!-- Allow opening WhatsApp & Telegram apps -->
     <key>LSApplicationQueriesSchemes</key>
     <array>
         <string>whatsapp</string>
