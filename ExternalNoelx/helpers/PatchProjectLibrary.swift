@@ -44,7 +44,7 @@ enum PatchProjectLibrary {
         return root
     }
 
-    // MARK: - Install Bundled Packages (Support Folder Reference)
+    // MARK: - Install Bundled Packages (Sync by packageID)
     static func installBundledPackagesIfNeeded(
         bundle: Bundle = .main,
         fileManager: FileManager = .default
@@ -55,91 +55,199 @@ enum PatchProjectLibrary {
         }
 
         var totalInstalled = 0
+        var totalReplaced = 0
+        var totalRemoved = 0
 
-        totalInstalled += installFromSubdirectory(
-            "Patches/FF Normal",
-            targetFolder: "FF Normal",
-            root: root,
-            bundle: bundle,
-            fileManager: fileManager
-        )
+        for (subdirectory, targetFolder) in [
+            ("Patches/FF Normal", "FF Normal"),
+            ("Patches/FF Max",    "FF Max")
+        ] {
+            let result = syncSubdirectory(
+                subdirectory,
+                targetFolder: targetFolder,
+                root: root,
+                bundle: bundle,
+                fileManager: fileManager
+            )
+            totalInstalled += result.installed
+            totalReplaced  += result.replaced
+            totalRemoved   += result.removed
+        }
 
-        totalInstalled += installFromSubdirectory(
-            "Patches/FF Max",
-            targetFolder: "FF Max",
-            root: root,
-            bundle: bundle,
-            fileManager: fileManager
-        )
-
+        // Fallback: file .3105 tanpa subdirectory
         let fallbackURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: nil) ?? []
-        if !fallbackURLs.isEmpty {
-            for sourceURL in fallbackURLs {
-                let filename = sourceURL.lastPathComponent
-                let targetFolder: String
-                if filename.hasPrefix("FFM ") {
-                    targetFolder = "FF Max"
-                } else if filename.hasPrefix("FFN ") || filename.hasPrefix("Noexk File") {
-                    targetFolder = "FF Normal"
+        for sourceURL in fallbackURLs {
+            let filename = sourceURL.lastPathComponent
+            let targetFolder: String
+            if filename.hasPrefix("FFM ") {
+                targetFolder = "FF Max"
+            } else {
+                targetFolder = "FF Normal"
+            }
+            let targetRoot = root.appendingPathComponent(targetFolder, isDirectory: true)
+            try? fileManager.createDirectory(at: targetRoot, withIntermediateDirectories: true)
+            let destinationURL = targetRoot.appendingPathComponent(filename)
+
+            do {
+                let data = try Data(contentsOf: sourceURL, options: .mappedIfSafe)
+                let newSummary = try PatchPackageCodec.inspect(data)
+
+                if let existingURL = findExistingPackageURL(
+                    packageID: newSummary.packageID,
+                    targetFolder: targetFolder,
+                    root: root,
+                    fileManager: fileManager
+                ) {
+                    if existingURL.path != destinationURL.path {
+                        try? fileManager.removeItem(at: existingURL)
+                        try data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
+                        totalReplaced += 1
+                    } else {
+                        if let existingData = try? Data(contentsOf: existingURL, options: .mappedIfSafe),
+                           existingData != data {
+                            try data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
+                            totalReplaced += 1
+                        }
+                    }
                 } else {
-                    targetFolder = "FF Normal"
+                    if !fileManager.fileExists(atPath: destinationURL.path) {
+                        try data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
+                        totalInstalled += 1
+                    }
                 }
-
-                let targetRoot = root.appendingPathComponent(targetFolder, isDirectory: true)
-                try? fileManager.createDirectory(at: targetRoot, withIntermediateDirectories: true)
-                let destinationURL = targetRoot.appendingPathComponent(filename)
-
-                guard !fileManager.fileExists(atPath: destinationURL.path) else { continue }
-                do {
-                    let data = try Data(contentsOf: sourceURL, options: .mappedIfSafe)
-                    _ = try PatchPackageCodec.inspect(data)
-                    try data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
-                    totalInstalled += 1
-                    log("patch: installed fallback \(filename)")
-                } catch {
-                    log("patch: skipped fallback \(filename): \(error)")
-                }
+            } catch {
+                log("patch: skipped fallback \(filename): \(error)")
             }
         }
 
-        log("patch: total installed bundled packages = \(totalInstalled)")
+        log("patch: sync done — installed=\(totalInstalled), replaced=\(totalReplaced), removed=\(totalRemoved)")
     }
 
-    private static func installFromSubdirectory(
+    /// Sync satu target folder — replace by packageID + cleanup orphans
+    private static func syncSubdirectory(
         _ subdirectory: String,
         targetFolder: String,
         root: URL,
         bundle: Bundle,
         fileManager: FileManager
-    ) -> Int {
+    ) -> (installed: Int, replaced: Int, removed: Int) {
         let targetRoot = root.appendingPathComponent(targetFolder, isDirectory: true)
         try? fileManager.createDirectory(at: targetRoot, withIntermediateDirectories: true)
 
-        guard let urls = bundle.urls(forResourcesWithExtension: "3105", subdirectory: subdirectory) else {
-            log("patch: no files found in bundle subdirectory '\(subdirectory)'")
-            return 0
+        guard let bundledURLs = bundle.urls(
+            forResourcesWithExtension: "3105",
+            subdirectory: subdirectory
+        ) else {
+            log("patch: no files in bundle subdirectory '\(subdirectory)'")
+            return (0, 0, 0)
         }
 
-        var installed = 0
-        for sourceURL in urls {
-            let filename = sourceURL.lastPathComponent
-            let destinationURL = targetRoot.appendingPathComponent(filename)
-
-            guard !fileManager.fileExists(atPath: destinationURL.path) else { continue }
-
+        // Map packageID → (url, data) dari bundle
+        var bundleByPackageID: [UUID: (url: URL, data: Data)] = [:]
+        for sourceURL in bundledURLs {
             do {
                 let data = try Data(contentsOf: sourceURL, options: .mappedIfSafe)
-                _ = try PatchPackageCodec.inspect(data)
-                try data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
-                installed += 1
-                log("patch: installed \(targetFolder)/\(filename)")
+                let summary = try PatchPackageCodec.inspect(data)
+                bundleByPackageID[summary.packageID] = (sourceURL, data)
             } catch {
-                log("patch: skipped \(targetFolder)/\(filename): \(error)")
+                log("patch: skip bundled \(sourceURL.lastPathComponent): \(error)")
             }
         }
 
-        log("patch: installed \(installed) files from '\(subdirectory)'")
-        return installed
+        // Cleanup: hapus file di app yang packageID-nya tidak ada di bundle baru
+        var removed = 0
+        if let existing = try? fileManager.contentsOfDirectory(
+            at: targetRoot,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+        ) {
+            for existingURL in existing where existingURL.pathExtension.lowercased() == "3105" {
+                guard let data = try? Data(contentsOf: existingURL, options: .mappedIfSafe),
+                      let summary = try? PatchPackageCodec.inspect(data) else {
+                    // File corrupt → hapus
+                    try? fileManager.removeItem(at: existingURL)
+                    removed += 1
+                    continue
+                }
+                if bundleByPackageID[summary.packageID] == nil {
+                    // Patch tidak ada lagi di bundle → hapus
+                    try? fileManager.removeItem(at: existingURL)
+                    try? PatchKeyStore.delete(for: summary)
+                    log("patch: removed orphan \(existingURL.lastPathComponent)")
+                    removed += 1
+                }
+            }
+        }
+
+        // Install / replace
+        var installed = 0
+        var replaced = 0
+        for (packageID, entry) in bundleByPackageID {
+            let filename = entry.url.lastPathComponent
+            let destinationURL = targetRoot.appendingPathComponent(filename)
+
+            let existingURL = findExistingPackageURL(
+                packageID: packageID,
+                targetFolder: targetFolder,
+                root: root,
+                fileManager: fileManager
+            )
+
+            if let existingURL {
+                // Sudah ada — cek data sama atau tidak
+                if let existingData = try? Data(contentsOf: existingURL, options: .mappedIfSafe),
+                   existingData == entry.data {
+                    // Identik — skip
+                    continue
+                }
+                // Beda → replace
+                if existingURL.path != destinationURL.path {
+                    try? fileManager.removeItem(at: existingURL)
+                }
+                do {
+                    try entry.data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
+                    replaced += 1
+                    log("patch: replaced \(targetFolder)/\(filename)")
+                } catch {
+                    log("patch: failed replace \(filename): \(error)")
+                }
+            } else {
+                // Belum ada → install
+                do {
+                    try entry.data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
+                    installed += 1
+                    log("patch: installed \(targetFolder)/\(filename)")
+                } catch {
+                    log("patch: failed install \(filename): \(error)")
+                }
+            }
+        }
+
+        return (installed, replaced, removed)
+    }
+
+    /// Cari file .3105 di app berdasarkan packageID
+    private static func findExistingPackageURL(
+        packageID: UUID,
+        targetFolder: String,
+        root: URL,
+        fileManager: FileManager
+    ) -> URL? {
+        let targetRoot = root.appendingPathComponent(targetFolder, isDirectory: true)
+        guard let files = try? fileManager.contentsOfDirectory(
+            at: targetRoot,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+        ) else { return nil }
+
+        for fileURL in files where fileURL.pathExtension.lowercased() == "3105" {
+            guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
+                  let summary = try? PatchPackageCodec.inspect(data) else { continue }
+            if summary.packageID == packageID {
+                return fileURL
+            }
+        }
+        return nil
     }
 
     // MARK: - Load Patches (Filter by Target)
