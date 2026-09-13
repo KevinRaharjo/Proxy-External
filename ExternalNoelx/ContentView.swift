@@ -16,6 +16,10 @@ struct ContentView: View {
     @State private var refreshToken = UUID()
     @State private var flagsToken = UUID()
 
+    // Delete Patch states
+    @State private var pendingDeletePatch: PatchLibraryItem?
+    @State private var showDeleteConfirm = false
+
     @AppStorage("selected_target") private var selectedTarget = "freefireth"
 
     var body: some View {
@@ -72,19 +76,28 @@ struct ContentView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+        .alert("Hapus Patch", isPresented: $showDeleteConfirm) {
+            Button("Cancel", role: .cancel) {
+                pendingDeletePatch = nil
+            }
+            Button("Hapus", role: .destructive) {
+                if let item = pendingDeletePatch {
+                    performDeletePatch(item)
+                }
+                pendingDeletePatch = nil
+            }
+        } message: {
+            Text(alertMessage)
+        }
     }
 
     // MARK: - Patch Flag Integration
 
     private func refreshPatchFlags(target: String) {
         Task {
-            // 1. Fetch flag terbaru (untuk badge di card)
             _ = try? await PatchFlagService.shared.fetchFlags(force: true)
-
-            // 2. Fetch daftar patch yang SUDAH ada di server
             _ = try? await PatchFlagService.shared.fetchKnownPatches(force: true)
 
-            // 3. Report — service otomatis filter, hanya kirim yang BELUM ada
             let reportItems = patchStore.items.map {
                 PatchReportItem(name: $0.displayName, target: target)
             }
@@ -95,7 +108,6 @@ struct ContentView: View {
                 )
             }
 
-            // 4. Trigger re-render supaya badge + note muncul
             await MainActor.run {
                 flagsToken = UUID()
             }
@@ -278,11 +290,35 @@ struct ContentView: View {
             isEnabled: isEnabled,
             isBusy: patchOperationBusy,
             tint: AppTheme.accent,
-            flag: flag
+            flag: flag,
+            onDelete: { confirmDeletePatch(item: item) }
         ) { newValue in
             togglePatch(item: item, currentlyEnabled: isEnabled, wantEnable: newValue)
         }
         .id("\(item.id)-\(flagsToken)")
+    }
+
+    private func confirmDeletePatch(item: PatchLibraryItem) {
+        alertMessage = "Hapus patch \"\(item.displayName)\" dari app?\n\nKalau di-apply, patch akan di-restore dulu. Patch bisa muncul lagi kalau update IPA baru."
+        pendingDeletePatch = item
+        showDeleteConfirm = true
+    }
+
+    private func performDeletePatch(_ item: PatchLibraryItem) {
+        // Restore dulu kalau sedang aktif
+        if let receipt = DevicePatchService.latestReceipt(projectID: item.id) {
+            try? DevicePatchService.restore(receipt: receipt)
+        }
+        do {
+            try PatchProjectLibrary.delete(item)
+            patchStore.reload()
+            patchMessage = "✅ Deleted — \(item.displayName)"
+            refreshToken = UUID()
+        } catch {
+            patchMessage = "❌ Gagal hapus patch"
+            alertMessage = "Gagal hapus: \(error)"
+            showAlert = true
+        }
     }
 
     // MARK: - Launch panel
@@ -525,7 +561,7 @@ struct ContentView: View {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// MARK: - Patch Tile (with NotchSliderToggle + Flag Badge)
+// MARK: - Patch Tile (with NotchSliderToggle + Flag Badge + Delete)
 // ═══════════════════════════════════════════════════════════════════════
 
 private struct PatchTile: View {
@@ -535,6 +571,7 @@ private struct PatchTile: View {
     let isBusy: Bool
     let tint: Color
     let flag: PatchFlag?
+    let onDelete: (() -> Void)?
     let onChange: (Bool) -> Void
 
     @State private var toggleState: Bool
@@ -546,6 +583,7 @@ private struct PatchTile: View {
         isBusy: Bool,
         tint: Color,
         flag: PatchFlag? = nil,
+        onDelete: (() -> Void)? = nil,
         onChange: @escaping (Bool) -> Void
     ) {
         self.name = name
@@ -554,6 +592,7 @@ private struct PatchTile: View {
         self.isBusy = isBusy
         self.tint = tint
         self.flag = flag
+        self.onDelete = onDelete
         self.onChange = onChange
         _toggleState = State(initialValue: isEnabled)
     }
@@ -667,6 +706,13 @@ private struct PatchTile: View {
         .opacity(isBusy ? 0.6 : 1)
         .onChange(of: isEnabled) { newValue in
             toggleState = newValue
+        }
+        .contextMenu {
+            if let onDelete {
+                Button(role: .destructive, action: onDelete) {
+                    Label("Hapus Patch", systemImage: "trash")
+                }
+            }
         }
     }
 
