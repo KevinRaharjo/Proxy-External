@@ -74,7 +74,7 @@ enum PatchProjectLibrary {
             totalRemoved   += result.removed
         }
 
-        // Fallback: file .3105 tanpa subdirectory
+        // Fallback: .3105 files without subdirectory
         let fallbackURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: nil) ?? []
         for sourceURL in fallbackURLs {
             let filename = sourceURL.lastPathComponent
@@ -123,7 +123,7 @@ enum PatchProjectLibrary {
         log("patch: sync done — installed=\(totalInstalled), replaced=\(totalReplaced), removed=\(totalRemoved)")
     }
 
-    /// Sync satu target folder — replace by packageID + cleanup orphans
+    /// Sync a single target folder — replace by packageID + cleanup orphans
     private static func syncSubdirectory(
         _ subdirectory: String,
         targetFolder: String,
@@ -142,7 +142,7 @@ enum PatchProjectLibrary {
             return (0, 0, 0)
         }
 
-        // Map packageID → (url, data) dari bundle
+        // Map packageID → (url, data) from bundle
         var bundleByPackageID: [UUID: (url: URL, data: Data)] = [:]
         for sourceURL in bundledURLs {
             do {
@@ -154,7 +154,7 @@ enum PatchProjectLibrary {
             }
         }
 
-        // Cleanup: hapus file di app yang packageID-nya tidak ada di bundle baru
+        // Cleanup: remove files in app whose packageID is not in new bundle
         var removed = 0
         if let existing = try? fileManager.contentsOfDirectory(
             at: targetRoot,
@@ -164,13 +164,13 @@ enum PatchProjectLibrary {
             for existingURL in existing where existingURL.pathExtension.lowercased() == "3105" {
                 guard let data = try? Data(contentsOf: existingURL, options: .mappedIfSafe),
                       let summary = try? PatchPackageCodec.inspect(data) else {
-                    // File corrupt → hapus
+                    // Corrupt file → delete
                     try? fileManager.removeItem(at: existingURL)
                     removed += 1
                     continue
                 }
                 if bundleByPackageID[summary.packageID] == nil {
-                    // Patch tidak ada lagi di bundle → hapus
+                    // Patch not in bundle anymore → delete
                     try? fileManager.removeItem(at: existingURL)
                     try? PatchKeyStore.delete(for: summary)
                     log("patch: removed orphan \(existingURL.lastPathComponent)")
@@ -194,13 +194,13 @@ enum PatchProjectLibrary {
             )
 
             if let existingURL {
-                // Sudah ada — cek data sama atau tidak
+                // Already exists — check if data is identical
                 if let existingData = try? Data(contentsOf: existingURL, options: .mappedIfSafe),
                    existingData == entry.data {
-                    // Identik — skip
+                    // Identical — skip
                     continue
                 }
-                // Beda → replace
+                // Different → replace
                 if existingURL.path != destinationURL.path {
                     try? fileManager.removeItem(at: existingURL)
                 }
@@ -212,7 +212,7 @@ enum PatchProjectLibrary {
                     log("patch: failed replace \(filename): \(error)")
                 }
             } else {
-                // Belum ada → install
+                // Not yet installed → install
                 do {
                     try entry.data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
                     installed += 1
@@ -226,7 +226,7 @@ enum PatchProjectLibrary {
         return (installed, replaced, removed)
     }
 
-    /// Cari file .3105 di app berdasarkan packageID
+    /// Find existing .3105 file in app by packageID
     private static func findExistingPackageURL(
         packageID: UUID,
         targetFolder: String,
