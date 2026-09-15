@@ -13,6 +13,8 @@ struct SettingsView: View {
     @State private var showRestartAlert = false
     @State private var showResultAlert = false
     @State private var showDeactivateAlert = false
+    @State private var showGuestResetAlert = false
+    @State private var isResettingGuest = false
 
     var body: some View {
         NavigationStack {
@@ -22,6 +24,7 @@ struct SettingsView: View {
                 languageSection
                 deviceSection
                 licenseSection
+                guestResetSection
                 versionSupportSection
                 dangerZoneSection
             }
@@ -54,6 +57,12 @@ struct SettingsView: View {
             } message: {
                 Text("Are you sure you want to remove the activation from this device? You can re-activate with the same key on another device.")
             }
+            .alert("Reset Guest FF", isPresented: $showGuestResetAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Reset", role: .destructive) { performGuestReset() }
+            } message: {
+                Text("This will delete FF guest account data so FF creates a fresh guest.\n\nMake sure FF is CLOSED from App Switcher first.\n\nContinue?")
+            }
             .alert("Result", isPresented: $showResultAlert) {
                 Button("OK") { resetMessage = "" }
             } message: {
@@ -61,6 +70,8 @@ struct SettingsView: View {
             }
         }
     }
+
+    // MARK: - Sections
 
     @ViewBuilder
     private var appInfoSection: some View {
@@ -176,6 +187,48 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Guest Reset
+
+    @ViewBuilder
+    private var guestResetSection: some View {
+        Section {
+            let ff = FFGuestReset.isFFInstalled()
+
+            HStack(spacing: 10) {
+                Image(systemName: ff.normal || ff.max
+                      ? "checkmark.circle.fill"
+                      : "xmark.circle.fill")
+                    .foregroundStyle(ff.normal || ff.max ? .green : .secondary)
+                Text(ff.normal || ff.max ? "FF installed" : "FF not installed")
+                    .font(.subheadline)
+                Spacer()
+                if ff.normal { Text("Normal").font(.caption).foregroundStyle(.secondary) }
+                if ff.max { Text("Max").font(.caption).foregroundStyle(.secondary) }
+            }
+
+            Button(role: .destructive) {
+                showGuestResetAlert = true
+            } label: {
+                HStack(spacing: 10) {
+                    if isResettingGuest {
+                        ProgressView().scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "arrow.counterclockwise.circle.fill")
+                    }
+                    Text(isResettingGuest ? "Resetting..." : "Reset Guest FF")
+                        .fontWeight(.semibold)
+                }
+            }
+            .disabled((!ff.normal && !ff.max) || isResettingGuest)
+        } header: {
+            Label("Guest Reset", systemImage: "person.crop.circle.badge.xmark")
+                .foregroundStyle(AppTheme.accentBright)
+        } footer: {
+            Text("Deletes the old FF guest account so FF creates a new one. Useful for soft bans (7 days / 30 days).\n\n⚠️ Close FF from App Switcher before resetting.")
+                .foregroundStyle(AppTheme.silverDim)
+        }
+    }
+
     @ViewBuilder
     private var versionSupportSection: some View {
         Section {
@@ -224,6 +277,8 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Helpers
+
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "AppReleaseDisplayVersion") as? String
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -264,6 +319,30 @@ struct SettingsView: View {
         } catch {
             resetMessage = "Reset failed: \(error.localizedDescription)"
             showResultAlert = true
+        }
+    }
+
+    private func performGuestReset() {
+        isResettingGuest = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let report = try FFGuestReset.resetAllGuests()
+                DispatchQueue.main.async {
+                    isResettingGuest = false
+                    if report.perBundle.isEmpty && report.errors.isEmpty {
+                        resetMessage = "No FF installed on this device."
+                    } else {
+                        resetMessage = "✅ Reset Guest FF Success\n\n\(report.summary)\n\nNow open FF to create a new guest account."
+                    }
+                    showResultAlert = true
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    isResettingGuest = false
+                    resetMessage = "❌ Reset failed: \(error.localizedDescription)"
+                    showResultAlert = true
+                }
+            }
         }
     }
 }
