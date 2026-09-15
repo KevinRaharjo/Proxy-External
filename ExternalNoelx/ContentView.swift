@@ -15,8 +15,17 @@ struct ContentView: View {
     @State private var alertMessage = ""
     @State private var refreshToken = UUID()
     @State private var flagsToken = UUID()
+    @State private var selectedCategory: PatchCategory = .aim
 
     @AppStorage("selected_target") private var selectedTarget = "freefireth"
+
+    private var targetFolder: String {
+        selectedTarget == "freefiremax" ? "FF Max" : "FF Normal"
+    }
+
+    private var filteredPatches: [PatchLibraryItem] {
+        patchStore.items.filter { $0.category == selectedCategory }
+    }
 
     var body: some View {
         ZStack {
@@ -26,6 +35,7 @@ struct ContentView: View {
                 VStack(spacing: 18) {
                     brandHeader
                     devicePanel
+                    categorySelector
                     patchOptions
                     gameLaunchPanel
                     footerStatus
@@ -47,22 +57,20 @@ struct ContentView: View {
             PatchUnlockPrompt(store: patchStore)
         }
         .onAppear {
-            let targetFolder = selectedTarget == "freefiremax" ? "FF Max" : "FF Normal"
             patchStore.setTarget(targetFolder)
             patchMessage = "READY — SELECT A PATCH"
             refreshPatchFlags(target: targetFolder)
         }
         .onChange(of: selectedTarget) { newTarget in
-            let targetFolder = newTarget == "freefiremax" ? "FF Max" : "FF Normal"
-            patchStore.setTarget(targetFolder)
+            let folder = newTarget == "freefiremax" ? "FF Max" : "FF Normal"
+            patchStore.setTarget(folder)
             patchMessage = "READY — SELECT A PATCH"
-            refreshPatchFlags(target: targetFolder)
+            refreshPatchFlags(target: folder)
         }
         .onChange(of: scenePhase) { phase in
             guard phase == .active, !patchOperationBusy else { return }
             patchStore.reload()
             patchMessage = "READY — SELECT A PATCH"
-            let targetFolder = selectedTarget == "freefiremax" ? "FF Max" : "FF Normal"
             refreshPatchFlags(target: targetFolder)
         }
         .alert(isPresented: $showAlert) {
@@ -98,8 +106,7 @@ struct ContentView: View {
     }
 
     private func currentFlag(for item: PatchLibraryItem) -> PatchFlag? {
-        let targetFolder = selectedTarget == "freefiremax" ? "FF Max" : "FF Normal"
-        return PatchFlagService.shared.snapshot.get("\(item.displayName)@\(targetFolder)")
+        PatchFlagService.shared.snapshot.get("\(item.displayName)@\(targetFolder)")
     }
 
     // MARK: - Brand header
@@ -114,9 +121,9 @@ struct ContentView: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("External Nixx")
-                    .font(.system(size: 25, weight: .black, design: .rounded))
-                    .tracking(2.5)
+                Text("VANTA EXTERNAL")
+                    .font(.system(size: 22, weight: .black, design: .rounded))
+                    .tracking(2.0)
                     .foregroundStyle(AppTheme.silverGradient)
                     .shadow(color: AppTheme.accentGlow, radius: 6)
                 Text(selectedTarget == "freefiremax" ? "FF MAX EDITION" : "FF NORMAL EDITION")
@@ -148,6 +155,84 @@ struct ContentView: View {
         .padding(.vertical, 4)
     }
 
+    // MARK: - Category selector (animated)
+
+    private var categorySelector: some View {
+        HStack(spacing: 0) {
+            ForEach(PatchCategory.allCases) { category in
+                categoryPill(category)
+            }
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(AppTheme.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(AppTheme.borderSubtle, lineWidth: 0.8)
+                )
+        )
+    }
+
+    @ViewBuilder
+    private func categoryPill(_ category: PatchCategory) -> some View {
+        let isSelected = selectedCategory == category
+
+        Button {
+            guard !isSelected else { return }
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.78)) {
+                selectedCategory = category
+            }
+            // Light haptic tick on category switch.
+            UISelectionFeedbackGenerator().selectionChanged()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: category.icon)
+                    .font(.system(size: 12, weight: .bold))
+                Text(category.displayName)
+                    .font(.system(size: 12, weight: .heavy, design: .rounded))
+                    .tracking(1.2)
+            }
+            .foregroundStyle(isSelected
+                             ? AppTheme.silverBright
+                             : AppTheme.silverDim)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                ZStack {
+                    // Inactive base — invisible, kept for stable hit area.
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.clear)
+
+                    // Active pill — animates in via matchedGeometryEffect.
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        category.tint.opacity(0.95),
+                                        category.tint.opacity(0.62)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(AppTheme.accentBright.opacity(0.55), lineWidth: 0.8)
+                            )
+                            .shadow(color: category.tint.opacity(0.45), radius: 10, y: 3)
+                            .matchedGeometryEffect(id: "categoryPill", in: categoryNamespace)
+                    }
+                }
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @Namespace private var categoryNamespace
+
     // MARK: - Device panel
 
     private var devicePanel: some View {
@@ -177,31 +262,37 @@ struct ContentView: View {
     private var patchOptions: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                panelTitle("PATCH OPTIONS", icon: "bolt.fill")
+                panelTitle("\(selectedCategory.displayName) PATCHES", icon: selectedCategory.icon)
                 Spacer()
-                Text("\(patchStore.items.count) PATCHES")
+                Text("\(filteredPatches.count) AVAILABLE")
                     .font(.system(size: 10, weight: .heavy, design: .rounded))
                     .tracking(1.0)
                     .foregroundStyle(AppTheme.silverMuted)
+                    .contentTransition(.numericText())
             }
             .padding(.horizontal, 4)
 
-            if patchStore.items.isEmpty {
-                emptyPatchState
-            } else {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 12),
-                        GridItem(.flexible(), spacing: 12)
-                    ],
-                    spacing: 12
-                ) {
-                    ForEach(patchStore.items) { item in
-                        patchCard(item: item)
+            Group {
+                if filteredPatches.isEmpty {
+                    emptyPatchState
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                } else {
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12)
+                        ],
+                        spacing: 12
+                    ) {
+                        ForEach(filteredPatches) { item in
+                            patchCard(item: item)
+                        }
                     }
+                    .id(refreshToken)
+                    .transition(.opacity)
                 }
-                .id(refreshToken)
             }
+            .animation(.easeInOut(duration: 0.22), value: selectedCategory)
 
             patchStatusBar
         }
@@ -212,10 +303,10 @@ struct ContentView: View {
             Image(systemName: "folder.badge.questionmark")
                 .font(.system(size: 38, weight: .light))
                 .foregroundStyle(AppTheme.silverMuted)
-            Text("No patches found")
+            Text("No \(selectedCategory.displayName) patches found")
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundStyle(AppTheme.silver)
-            Text("Add .3105 files to Patches/\(selectedTarget == "freefiremax" ? "FF Max" : "FF Normal")/")
+            Text("Add \(selectedCategory.displayName)-*.3105 files to Patches/\(targetFolder)/")
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(AppTheme.silverMuted)
                 .multilineTextAlignment(.center)
@@ -272,7 +363,7 @@ struct ContentView: View {
             target: selectedTarget == "freefiremax" ? "FREE FIRE • MAX" : "FREE FIRE • NORMAL",
             isEnabled: isEnabled,
             isBusy: patchOperationBusy,
-            tint: AppTheme.accent,
+            tint: selectedCategory.tint,
             flag: flag
         ) { newValue in
             togglePatch(item: item, currentlyEnabled: isEnabled, wantEnable: newValue)
@@ -365,7 +456,7 @@ struct ContentView: View {
                 .tracking(1.4)
                 .foregroundStyle(AppTheme.silverDim)
             Spacer()
-            Text("External Nixx • ONLINE")
+            Text("VANTA EXTERNAL • ONLINE")
                 .font(.system(size: 10, weight: .heavy, design: .rounded))
                 .foregroundStyle(AppTheme.accentBright.opacity(0.9))
         }
@@ -380,7 +471,7 @@ struct ContentView: View {
             Text("Developed by Kevin")
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundStyle(AppTheme.silverDim)
-            Text("External Nixx Telegram")
+            Text("VANTA EXTERNAL Telegram")
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundStyle(AppTheme.accentBright.opacity(0.85))
             Button {
@@ -444,7 +535,7 @@ struct ContentView: View {
         if let flag = currentFlag(for: item) {
             let note = (flag.note?.isEmpty == false) ? flag.note! : nil
             let label = (flag.label?.isEmpty == false) ? flag.label! : "Flagged"
-            alertMessage = note ?? "Patch ini ditandai oleh admin: \(label). Tidak bisa diaktifkan."
+            alertMessage = note ?? "This patch was flagged by admin: \(label). Cannot be enabled."
             showAlert = true
             refreshToken = UUID()
             return
@@ -741,7 +832,7 @@ private struct PatchUnlockPrompt: View {
                             .foregroundStyle(.red)
                     }
                 } footer: {
-                    Text("Enter the password once to unlock this External Nixx package on this device.")
+                    Text("Enter the password once to unlock this VANTA EXTERNAL package on this device.")
                 }
             }
             .navigationTitle("Unlock package")
