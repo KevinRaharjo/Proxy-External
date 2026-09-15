@@ -17,7 +17,7 @@ xcodebuild -list -project "$ROOT/ExternalNoelx.xcodeproj" || {
     exit 1
 }
 
-echo "=== Building archive ==="
+echo "=== Building archive (scheme: NixxTime) ==="
 xcodebuild \
   -project "$ROOT/ExternalNoelx.xcodeproj" \
   -scheme NixxTime \
