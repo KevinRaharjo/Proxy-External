@@ -121,7 +121,7 @@ struct ContentView: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("VANTA EXTERNAL")
+                Text("EXTERNAL NIXX")
                     .font(.system(size: 22, weight: .black, design: .rounded))
                     .tracking(2.0)
                     .foregroundStyle(AppTheme.silverGradient)
@@ -456,7 +456,7 @@ struct ContentView: View {
                 .tracking(1.4)
                 .foregroundStyle(AppTheme.silverDim)
             Spacer()
-            Text("VANTA EXTERNAL • ONLINE")
+            Text("EXTERNAL NIXX • ONLINE")
                 .font(.system(size: 10, weight: .heavy, design: .rounded))
                 .foregroundStyle(AppTheme.accentBright.opacity(0.9))
         }
@@ -471,7 +471,7 @@ struct ContentView: View {
             Text("Developed by Kevin")
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundStyle(AppTheme.silverDim)
-            Text("VANTA EXTERNAL Telegram")
+            Text("EXTERNAL NIXX Telegram")
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundStyle(AppTheme.accentBright.opacity(0.85))
             Button {
@@ -832,7 +832,7 @@ private struct PatchUnlockPrompt: View {
                             .foregroundStyle(.red)
                     }
                 } footer: {
-                    Text("Enter the password once to unlock this VANTA EXTERNAL package on this device.")
+                    Text("Enter the password once to unlock this EXTERNAL NIXX package on this device.")
                 }
             }
             .navigationTitle("Unlock package")
