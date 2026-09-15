@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-IPA="${1:-$ROOT/build/External-Noelx-unsigned.ipa}"
+IPA="${1:-$ROOT/build/External-Nixx.ipa}"
 
 if ! command -v unzip >/dev/null 2>&1; then
   echo "Error: unzip is required." >&2
@@ -14,7 +14,7 @@ if [[ ! -f "$IPA" ]]; then
   "$ROOT/build_unsigned.sh"
 fi
 
-WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ExternalNoelx-esign.XXXXXX")"
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/NixxTime-esign.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 unzip -q "$IPA" -d "$WORK_DIR/unpacked"
@@ -32,8 +32,9 @@ if [[ -e "$APP/embedded.mobileprovision" || -e "$APP/_CodeSignature" ]]; then
   exit 1
 fi
 
-if [[ ! -x "$APP/NixxTime" ]]; then
-  echo "Error: expected original executable OGIOS was not found in the app bundle." >&2
+EXECUTABLE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist" 2>/dev/null || echo 'NixxTime')"
+if [[ ! -x "$APP/$EXECUTABLE_NAME" ]]; then
+  echo "Error: expected executable '$EXECUTABLE_NAME' not found in app bundle." >&2
   exit 1
 fi
 
@@ -44,4 +45,5 @@ fi
 
 echo "eSign-ready IPA verified: $IPA"
 echo "App bundle: $APP"
+echo "Executable: $EXECUTABLE_NAME"
 echo "The IPA is unsigned and contains no embedded provisioning profile."
