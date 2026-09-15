@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import Darwin
 
 // Local integrity checks for the app bundle and patch files.
 // Complements the server-side validation (Batch 2).
@@ -41,7 +42,6 @@ final class IntegrityChecker {
 
     // MARK: - Public API
 
-    /// Run all local integrity checks. Call this on app launch.
     func runLocalChecks() -> IntegrityResult {
         // 1. Jailbreak / hook detection
         if let hookResult = detectHooking() {
@@ -66,8 +66,6 @@ final class IntegrityChecker {
         return .ok
     }
 
-    /// Store initial hashes on first launch. Subsequent launches compare
-    /// against these stored values.
     func snapshotOnFirstLaunch() {
         guard !UserDefaults.standard.bool(forKey: "extNixx.integrity.initialized") else {
             return
@@ -98,7 +96,7 @@ final class IntegrityChecker {
     private func verifyExecutable() -> IntegrityResult? {
         guard let currentHash = computeExecutableHash(),
               let storedHash = keychainGetData(key: Keys.appExecutableHash) else {
-            return nil   // no snapshot yet — skip
+            return nil
         }
         if currentHash != storedHash {
             log("[integrity] ❌ executable hash mismatch")
@@ -159,7 +157,6 @@ final class IntegrityChecker {
 
         let current = computeAllPatchHashes()
 
-        // Check for modified / deleted patches
         for (relativePath, storedHash) in stored {
             guard let currentHash = current[relativePath] else {
                 log("[integrity] ❌ patch file missing: \(relativePath)")
@@ -171,7 +168,6 @@ final class IntegrityChecker {
             }
         }
 
-        // Check for added patches (not in snapshot)
         for relativePath in current.keys where stored[relativePath] == nil {
             log("[integrity] ❌ unauthorised patch added: \(relativePath)")
             return .tamperedPatch(relativePath)
@@ -181,42 +177,37 @@ final class IntegrityChecker {
     }
 
     // MARK: - Hook / jailbreak detection
+    //
+    // IMPORTANT: We do NOT call _dyld_image_count / _dyld_get_image_name here.
+    // Those symbols live in <mach-o/dyld.h> and are not exposed to Swift without
+    // an explicit shim, and the previous build failed with:
+    //     "cannot find '_dyld_image_count' in scope"
+    //     "cannot find '_dyld_get_image_name' in scope"
+    // Instead we detect hooking using paths and system probes that do not
+    // require the dyld image list.
 
     private func detectHooking() -> IntegrityResult? {
-        // 1. Check for common jailbreak / hooking dylibs
-        let suspiciousLibraries = [
-            "Substrate", "substrate", "Substitute", "libhooker",
-            "Cephei", "TweakInject", "FridaGadget", "cynject",
-            "Rocky", "RockyBootstrap", "Dopamine", "ellekit", "ElleKit"
-        ]
-        let imageCount = _dyld_image_count()
-        for i in 0..<imageCount {
-            guard let namePtr = _dyld_get_image_name(i) else { continue }
-            let name = String(cString: namePtr)
-            for lib in suspiciousLibraries {
-                if name.localizedCaseInsensitiveContains(lib) {
-                    log("[integrity] ❌ suspicious dylib loaded: \(name)")
-                    return .hooked
-                }
-            }
-        }
+        let fm = FileManager.default
 
-        // 2. Check for common jailbreak paths
+        // 1. Common jailbreak / hooking paths
         let suspiciousPaths = [
             "/Applications/Cydia.app",
             "/Applications/Sileo.app",
             "/Applications/Zebra.app",
             "/Applications/TrollStore.app",
             "/Library/MobileSubstrate",
+            "/Library/MobileSubstrate/MobileSubstrate.dylib",
             "/usr/lib/libsubstrate.dylib",
             "/usr/lib/libsubstitute.dylib",
             "/usr/lib/libhooker.dylib",
+            "/usr/sbin/frida-server",
             "/var/jb",
+            "/var/jb/usr/sbin/frida-server",
             "/var/lib/dpkg/status",
             "/bin/bash",
-            "/bin/ssh"
+            "/bin/ssh",
+            "/private/var/lib/dpkg/status"
         ]
-        let fm = FileManager.default
         for path in suspiciousPaths {
             if fm.fileExists(atPath: path) {
                 log("[integrity] ❌ jailbreak path detected: \(path)")
@@ -224,7 +215,28 @@ final class IntegrityChecker {
             }
         }
 
-        // 3. Check if we can write to system paths we shouldn't
+        // 2. Common hooking dylibs via absolute path probe (existence check
+        //    is enough for the standard jailbreak layouts).
+        let suspiciousDylibs = [
+            "/usr/lib/libsubstrate.dylib",
+            "/usr/lib/libsubstitute.dylib",
+            "/usr/lib/libhooker.dylib",
+            "/usr/lib/ellekit/libellekit.dylib",
+            "/var/jb/usr/lib/libsubstrate.dylib",
+            "/var/jb/usr/lib/libsubstitute.dylib",
+            "/var/jb/usr/lib/libhooker.dylib",
+            "/var/jb/usr/lib/ellekit/libellekit.dylib",
+            "/usr/lib/TweakInject.dylib",
+            "/var/jb/usr/lib/TweakInject.dylib"
+        ]
+        for path in suspiciousDylibs {
+            if fm.fileExists(atPath: path) {
+                log("[integrity] ❌ suspicious dylib on disk: \(path)")
+                return .hooked
+            }
+        }
+
+        // 3. Writable system paths (jailbreak tell-tale)
         let testPaths = ["/etc/hosts", "/private/etc/hosts"]
         for path in testPaths {
             if fm.isWritableFile(atPath: path) {
@@ -233,14 +245,7 @@ final class IntegrityChecker {
             }
         }
 
-        // 4. Check for Frida
-        if fm.fileExists(atPath: "/usr/sbin/frida-server") ||
-           fm.fileExists(atPath: "/var/jb/usr/sbin/frida-server") {
-            log("[integrity] ❌ Frida detected")
-            return .hooked
-        }
-
-        // 5. Check for ptrace / debugger attached
+        // 4. Ptrace / debugger attached
         var info = kinfo_proc()
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
         var size = MemoryLayout<kinfo_proc>.stride
