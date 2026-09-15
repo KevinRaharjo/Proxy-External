@@ -24,7 +24,7 @@ enum PatchCategory: String, CaseIterable, Identifiable {
 
     /// Subtle per-category tint used by the segmented control glow.
     /// All stay in the blue family (no red/purple/green) to keep the
-    /// VANTA look consistent.
+    /// External Nixx look consistent.
     var tint: Color {
         switch self {
         case .aim:  return AppTheme.accent
