@@ -3,10 +3,26 @@ import UIKit
 import Security
 
 enum FFGuestReset {
-    /// Free Fire bundle IDs
+    /// Free Fire bundle IDs — covers both Garena and DTS variants.
     static let ffBundleIDs = [
-        "com.garena.game.kgth",  // FF Normal
-        "com.garena.game.kgid"   // FF Max
+        // FF Normal
+        "com.dts.freefireth",         // DTS variant (global/SEA)
+        "com.garena.game.kgth",       // Garena variant
+        // FF Max
+        "com.dts.freefiremax",        // DTS variant
+        "com.garena.game.kgid"        // Garena variant
+    ]
+
+    /// Bundle IDs that belong to "Normal" FF.
+    private static let normalBundles: Set<String> = [
+        "com.dts.freefireth",
+        "com.garena.game.kgth"
+    ]
+
+    /// Bundle IDs that belong to "Max" FF.
+    private static let maxBundles: Set<String> = [
+        "com.dts.freefiremax",
+        "com.garena.game.kgid"
     ]
 
     /// Reset all FF guest data on this device.
@@ -14,7 +30,13 @@ enum FFGuestReset {
     /// Works best for soft bans (7 days, 30 days).
     static func resetAllGuests() throws -> ResetReport {
         var report = ResetReport()
+
         for bundleID in ffBundleIDs {
+            // Skip bundles that aren't installed
+            guard ContainerStore.resolveAppContainerPath(bundleID: bundleID) != nil else {
+                log("FFGuestReset: skip \(bundleID) — not installed")
+                continue
+            }
             do {
                 let count = try resetGuest(bundleID: bundleID)
                 report.perBundle[bundleID] = count
@@ -30,7 +52,7 @@ enum FFGuestReset {
         guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID),
               ContainerStore.isApplicationContainerPath(containerPath) else {
             throw NSError(domain: "FFGuestReset", code: 1,
-                         userInfo: [NSLocalizedDescriptionKey: "FF container not found"])
+                         userInfo: [NSLocalizedDescriptionKey: "FF container not found for \(bundleID)"])
         }
 
         let containerURL = URL(fileURLWithPath: containerPath, isDirectory: true)
@@ -38,7 +60,19 @@ enum FFGuestReset {
         var deletedCount = 0
 
         // ═══════════════════════════════════════════════
-        // 1. Delete device_id / guest account files
+        // 1. Delete `reset_guest.flag` (guest reset marker)
+        //    FF creates this when resetting; if it exists,
+        //    FF skips reset. Deleting it forces a new reset.
+        // ═══════════════════════════════════════════════
+        let resetFlagPath = containerURL.appendingPathComponent("Documents/reset_guest.flag")
+        if fm.fileExists(atPath: resetFlagPath.path) {
+            try? fm.removeItem(at: resetFlagPath)
+            deletedCount += 1
+            log("FFGuestReset: deleted Documents/reset_guest.flag")
+        }
+
+        // ═══════════════════════════════════════════════
+        // 2. Delete device_id / guest account files
         // ═══════════════════════════════════════════════
         let deviceIDFiles = [
             "Documents/device_id.txt",
@@ -51,7 +85,9 @@ enum FFGuestReset {
             "Documents/DeviceInfo.dat",
             "Library/Caches/device_id.dat",
             "Library/Caches/com.garena.device.plist",
-            "Library/Preferences/com.garena.device.plist"
+            "Library/Caches/com.dts.device.plist",
+            "Library/Preferences/com.garena.device.plist",
+            "Library/Preferences/com.dts.device.plist"
         ]
 
         for relativePath in deviceIDFiles {
@@ -64,14 +100,15 @@ enum FFGuestReset {
         }
 
         // ═══════════════════════════════════════════════
-        // 2. Delete Garena Preferences
+        // 3. Delete Garena / DTS Preferences
         // ═══════════════════════════════════════════════
         let prefsDir = containerURL.appendingPathComponent("Library/Preferences")
         if let files = try? fm.contentsOfDirectory(at: prefsDir, includingPropertiesForKeys: nil) {
             for file in files where file.pathExtension == "plist" {
                 let name = file.lastPathComponent.lowercased()
-                if name.contains("garena") || name.contains("kgth") ||
-                   name.contains("kgid") || name.contains("ff.") {
+                if name.contains("garena") || name.contains("dts") ||
+                   name.contains("kgth") || name.contains("kgid") ||
+                   name.contains("freefire") || name.contains("ff.") {
                     try? fm.removeItem(at: file)
                     deletedCount += 1
                     log("FFGuestReset: deleted prefs \(file.lastPathComponent)")
@@ -80,12 +117,14 @@ enum FFGuestReset {
         }
 
         // ═══════════════════════════════════════════════
-        // 3. Delete Cache related to device/guest
+        // 4. Delete Cache related to device/guest
         // ═══════════════════════════════════════════════
         let cachesDirs = [
             "Library/Caches",
             "Library/Caches/com.garena.game.kgth",
-            "Library/Caches/com.garena.game.kgid"
+            "Library/Caches/com.garena.game.kgid",
+            "Library/Caches/com.dts.freefireth",
+            "Library/Caches/com.dts.freefiremax"
         ]
 
         for cachesDir in cachesDirs {
@@ -105,13 +144,17 @@ enum FFGuestReset {
         }
 
         // ═══════════════════════════════════════════════
-        // 4. Delete Keychain Garena
+        // 5. Delete Keychain Garena / DTS
         // ═══════════════════════════════════════════════
         let keychainServices = [
             "com.garena.game.kgth",
             "com.garena.game.kgid",
+            "com.dts.freefireth",
+            "com.dts.freefiremax",
             "com.garena.ff",
-            "com.garena.device"
+            "com.garena.device",
+            "com.dts.ff",
+            "com.dts.device"
         ]
 
         for service in keychainServices {
@@ -132,8 +175,19 @@ enum FFGuestReset {
 
     /// Check if FF is installed.
     static func isFFInstalled() -> (normal: Bool, max: Bool) {
-        let normal = ContainerStore.resolveAppContainerPath(bundleID: "com.garena.game.kgth") != nil
-        let max = ContainerStore.resolveAppContainerPath(bundleID: "com.garena.game.kgid") != nil
+        var normal = false
+        var max = false
+
+        for bundleID in ffBundleIDs {
+            let path = ContainerStore.resolveAppContainerPath(bundleID: bundleID)
+            log("FFGuestReset: check bundle=\(bundleID) path=\(path ?? "nil")")
+
+            guard path != nil else { continue }
+            if normalBundles.contains(bundleID) { normal = true }
+            if maxBundles.contains(bundleID) { max = true }
+        }
+
+        log("FFGuestReset: isFFInstalled normal=\(normal) max=\(max)")
         return (normal, max)
     }
 
@@ -149,7 +203,14 @@ enum FFGuestReset {
             }
             var lines: [String] = []
             for (bundleID, count) in perBundle {
-                let short = bundleID == "com.garena.game.kgth" ? "FF Normal" : "FF Max"
+                let short: String
+                if bundleID.contains("freefireth") || bundleID.contains("kgth") {
+                    short = "FF Normal"
+                } else if bundleID.contains("freefiremax") || bundleID.contains("kgid") {
+                    short = "FF Max"
+                } else {
+                    short = bundleID
+                }
                 lines.append("✓ \(short): \(count) files deleted")
             }
             for (bundleID, error) in errors {
