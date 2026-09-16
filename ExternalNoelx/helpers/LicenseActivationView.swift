@@ -4,153 +4,229 @@ struct LicenseActivationView: View {
     @ObservedObject var manager: LicenseManager
     @State private var key = ""
     @FocusState private var keyFocused: Bool
+    @State private var glowPulse = false
+    @State private var borderPhase = false
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                AnimatedHyperBackdrop()
-                    .ignoresSafeArea()
+        ZStack {
+            BP.bg.ignoresSafeArea()
+            scanlineBackground
 
-                Color.black.opacity(0.18)
-                    .ignoresSafeArea()
-
-                ScrollViewReader { proxy in
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 0) {
-                            Spacer(minLength: 42)
-
-                            Text("External Nixx")
-                                .font(.system(size: 30, weight: .black, design: .rounded))
-                                .tracking(1.4)
-                                .foregroundStyle(.white)
-
-                            Text("Version: 1.1.0")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.55))
-                                .padding(.top, 5)
-
-                            Text("Package: External Nixx")
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                                .foregroundStyle(AppTheme.secondaryAccent.opacity(0.9))
-                                .padding(.top, 8)
-
-                            VStack(spacing: 16) {
-                                HStack(spacing: 10) {
-                                    Image(systemName: manager.isBusy ? "arrow.triangle.2.circlepath" : "key.fill")
-                                        .foregroundStyle(AppTheme.secondaryAccent)
-                                        .font(.system(size: 16, weight: .bold))
-                                    Text(manager.isBusy ? "Verifying…" : "License Key")
-                                        .font(.system(size: 16, weight: .black, design: .rounded))
-                                        .foregroundStyle(.white)
-                                    Spacer()
-                                }
-
-                                Text("Enter your license key to activate External Nixx on this device")
-                                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                                    .foregroundStyle(.white.opacity(0.68))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                                TextField("NIXX-XXXX-XXXX-XXXX", text: $key)
-                                    .focused($keyFocused)
-                                    .textInputAutocapitalization(.characters)
-                                    .autocorrectionDisabled()
-                                    .submitLabel(.done)
-                                    .onSubmit { activate() }
-                                    .font(.system(size: 16, weight: .medium, design: .monospaced))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 16)
-                                    .frame(height: 54)
-                                    .background(Color.gray.opacity(0.22), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 17, style: .continuous).stroke(AppTheme.accent.opacity(0.48), lineWidth: 1))
-                                    .id("license-field")
-
-                                Toggle("Remember key on this device", isOn: $manager.rememberKey)
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.white.opacity(0.72))
-                                    .tint(AppTheme.accent)
-
-                                Button(action: activate) {
-                                    HStack(spacing: 9) {
-                                        Image(systemName: manager.isBusy ? "hourglass" : "checkmark.shield.fill")
-                                        Text(manager.isBusy ? "VERIFYING…" : "ACTIVATE")
-                                    }
-                                    .font(.system(size: 14, weight: .black, design: .rounded))
-                                    .foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity, minHeight: 54)
-                                    .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
-                                    .shadow(color: AppTheme.accent.opacity(0.30), radius: 14, y: 7)
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || manager.isBusy)
-                                .opacity(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.48 : 1)
-
-                                if let message = manager.message {
-                                    Text(message)
-                                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                                        .foregroundStyle(messageColor(message))
-                                        .multilineTextAlignment(.center)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 10)
-                                        .background(Color.gray.opacity(0.20), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                }
-                            }
-                            .padding(20)
-                            .background(.ultraThinMaterial.opacity(0.72), in: RoundedRectangle(cornerRadius: 25, style: .continuous))
-                            .background(Color.gray.opacity(0.18), in: RoundedRectangle(cornerRadius: 25, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 25, style: .continuous).stroke(Color.white.opacity(0.16), lineWidth: 1))
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 60)
+                        logoSection
+                        titleSection
+                        activationCard
                             .padding(.horizontal, 22)
-                            .padding(.top, 26)
-                            .id("activation-card")
-
-                            // Contact section
-                            VStack(spacing: 10) {
-                                Text("Need help? Contact us")
-                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.white.opacity(0.5))
-
-                                HStack(spacing: 10) {
-                                    contactChip(
-                                        title: "WhatsApp",
-                                        icon: "message.fill",
-                                        color: Color(red: 0.15, green: 0.83, blue: 0.38),
-                                        url: manager.supportWhatsApp
-                                    )
-                                    contactChip(
-                                        title: "Telegram",
-                                        icon: "paperplane.fill",
-                                        color: Color(red: 0.16, green: 0.63, blue: 0.87),
-                                        url: manager.supportTelegram
-                                    )
-                                }
-                            }
                             .padding(.top, 24)
+                            .id("activation-card")
+                        contactSection
+                            .padding(.top, 22)
                             .padding(.horizontal, 22)
-
-                            Spacer(minLength: 42)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.bottom, 28)
+                        Spacer(minLength: 40)
                     }
-                    .scrollDismissesKeyboard(.interactively)
-                    .onChange(of: keyFocused) { focused in
-                        guard focused else { return }
-                        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("activation-card", anchor: .center) }
+                    .frame(maxWidth: .infinity)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .onChange(of: keyFocused) { focused in
+                    guard focused else { return }
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        proxy.scrollTo("activation-card", anchor: .center)
                     }
                 }
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                glowPulse = true
+            }
+            withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
+                borderPhase = true
+            }
+        }
     }
 
-    // MARK: - Actions
+    // MARK: - Scanline background
 
-    private func activate() {
-        keyFocused = false
-        manager.activate(key: key)
+    private var scanlineBackground: some View {
+        GeometryReader { proxy in
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            BP.accent.opacity(0.04),
+                            BP.accent.opacity(0.08),
+                            BP.accent.opacity(0.04),
+                            .clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(height: 60)
+                .offset(y: borderPhase ? proxy.size.height + 60 : -60)
+        }
+        .allowsHitTesting(false)
+        .ignoresSafeArea()
     }
 
-    // MARK: - Helpers
+    // MARK: - Logo
+
+    private var logoSection: some View {
+        ZStack {
+            Circle()
+                .fill(BP.accent.opacity(0.18))
+                .frame(width: 120, height: 120)
+                .blur(radius: 30)
+                .scaleEffect(glowPulse ? 1.15 : 0.95)
+
+            Circle()
+                .fill(BP.panelHi)
+                .frame(width: 96, height: 96)
+                .overlay(
+                    Circle().stroke(BP.accent.opacity(0.55), lineWidth: 1.2)
+                )
+
+            AppLogo(size: 72)
+        }
+        .padding(.bottom, 22)
+    }
+
+    // MARK: - Title
+
+    private var titleSection: some View {
+        VStack(spacing: 6) {
+            Text("EXTERNAL NIXX")
+                .font(.system(size: 24, weight: .black, design: .monospaced))
+                .tracking(3.0)
+                .foregroundStyle(BP.text)
+                .shadow(color: BP.accentGlow, radius: 6)
+
+            Text("LICENSE ACTIVATION")
+                .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                .tracking(2.5)
+                .foregroundStyle(BP.accent)
+        }
+    }
+
+    // MARK: - Activation Card
+
+    private var activationCard: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 6) {
+                Text("─ KEY ─")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundStyle(BP.accent.opacity(0.5))
+                Spacer()
+                Text(manager.isBusy ? "VERIFYING…" : "READY")
+                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                    .tracking(1.5)
+                    .foregroundStyle(manager.isBusy ? BP.warning : BP.accent)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("ENTER YOUR LICENSE KEY")
+                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                    .tracking(1.5)
+                    .foregroundStyle(BP.textFaint)
+
+                TextField("NIXX-XXXX-XXXX-XXXX", text: $key)
+                    .focused($keyFocused)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onSubmit(activate)
+                    .font(.system(size: 16, weight: .medium, design: .monospaced))
+                    .foregroundStyle(BP.text)
+                    .padding(.horizontal, 14)
+                    .frame(height: 52)
+                    .background(BP.bg)
+                    .overlay(
+                        Rectangle().stroke(
+                            keyFocused ? BP.accent : BP.lineBright,
+                            lineWidth: keyFocused ? 1.2 : 0.8
+                        )
+                    )
+                    .id("license-field")
+
+                Toggle("Remember on this device", isOn: $manager.rememberKey)
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .tracking(0.8)
+                    .foregroundStyle(BP.textDim)
+                    .tint(BP.accent)
+
+                Button(action: activate) {
+                    HStack(spacing: 8) {
+                        if manager.isBusy {
+                            ProgressView().tint(BP.bg).scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "checkmark.shield.fill")
+                                .font(.system(size: 13, weight: .black))
+                        }
+                        Text(manager.isBusy ? "VERIFYING…" : "ACTIVATE")
+                    }
+                }
+                .buttonStyle(BPButtonStyle(color: BP.accent, filled: true))
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || manager.isBusy)
+                .opacity(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1.0)
+
+                if let message = manager.message {
+                    Text(message)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .tracking(0.5)
+                        .foregroundStyle(messageColor(message))
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(messageColor(message).opacity(0.10))
+                        .overlay(
+                            Rectangle().stroke(messageColor(message).opacity(0.5), lineWidth: 0.8)
+                        )
+                }
+            }
+            .padding(14)
+            .padding(.bottom, 12)
+        }
+        .background(BP.panel)
+        .overlay(Rectangle().stroke(BP.line, lineWidth: 0.5))
+        .overlay(alignment: .leading) {
+            Rectangle().fill(BP.accent).frame(width: 2)
+        }
+    }
+
+    // MARK: - Contact
+
+    private var contactSection: some View {
+        VStack(spacing: 10) {
+            Text("NEED HELP?")
+                .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                .tracking(2.0)
+                .foregroundStyle(BP.textFaint)
+
+            HStack(spacing: 8) {
+                contactChip(
+                    title: "WHATSAPP",
+                    icon: "message.fill",
+                    color: Color(red: 0.15, green: 0.83, blue: 0.38),
+                    url: manager.supportWhatsApp
+                )
+                contactChip(
+                    title: "TELEGRAM",
+                    icon: "paperplane.fill",
+                    color: Color(red: 0.16, green: 0.63, blue: 0.87),
+                    url: manager.supportTelegram
+                )
+            }
+        }
+    }
 
     private func contactChip(title: String, icon: String, color: Color, url: String) -> some View {
         Button {
@@ -162,25 +238,32 @@ struct LicenseActivationView: View {
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(color)
                 Text(title)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                    .tracking(1.2)
+                    .foregroundStyle(BP.text)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color.black.opacity(0.4), in: Capsule())
-            .overlay(Capsule().stroke(color.opacity(0.4), lineWidth: 1))
+            .frame(maxWidth: .infinity, minHeight: 38)
+            .background(BP.panelHi)
+            .overlay(Rectangle().stroke(color.opacity(0.5), lineWidth: 0.8))
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Actions
+
+    private func activate() {
+        keyFocused = false
+        manager.activate(key: key)
     }
 
     private func messageColor(_ text: String) -> Color {
         let lower = text.lowercased()
         if lower.contains("activated") || lower.contains("active") || lower.contains("success") {
-            return .green
+            return BP.success
         }
         if lower.contains("maintenance") || lower.contains("offline") {
-            return .orange
+            return BP.warning
         }
-        return .red.opacity(0.95)
+        return BP.danger
     }
 }
