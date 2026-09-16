@@ -79,6 +79,10 @@
 		3105S001 /* IntegrityChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105S002 /* IntegrityChecker.swift */; };
 		3105S003 /* IntegrityErrorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105S004 /* IntegrityErrorView.swift */; };
 		3105T001 /* FFGuestReset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105T002 /* FFGuestReset.swift */; };
+		3105U200 /* AnnouncementModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105U201 /* AnnouncementModels.swift */; };
+		3105U202 /* AnnouncementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105U203 /* AnnouncementService.swift */; };
+		3105U204 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105U205 /* RootTabView.swift */; };
+		3105U206 /* InfoTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105U207 /* InfoTabView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -173,6 +177,10 @@
 		3105S002 /* IntegrityChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrityChecker.swift; sourceTree = "<group>"; };
 		3105S004 /* IntegrityErrorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntegrityErrorView.swift; sourceTree = "<group>"; };
 		3105T002 /* FFGuestReset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FFGuestReset.swift; sourceTree = "<group>"; };
+		3105U201 /* AnnouncementModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementModels.swift; sourceTree = "<group>"; };
+		3105U203 /* AnnouncementService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementService.swift; sourceTree = "<group>"; };
+		3105U205 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
+		3105U207 /* InfoTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoTabView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -201,6 +209,8 @@
 				3105A060 /* Info.plist */,
 				3105A020 /* App.swift */,
 				3105A021 /* ContentView.swift */,
+				3105U205 /* RootTabView.swift */,
+				3105U207 /* InfoTabView.swift */,
 				3105A403 /* exploit */,
 				3105A404 /* views */,
 				3105A405 /* helpers */,
@@ -293,6 +303,8 @@
 				3105R002 /* PatchCategory.swift */,
 				3105S002 /* IntegrityChecker.swift */,
 				3105T002 /* FFGuestReset.swift */,
+				3105U201 /* AnnouncementModels.swift */,
+				3105U203 /* AnnouncementService.swift */,
 				3105A106 /* AppIconHelper.m */,
 				3105A107 /* AppIconHelper.h */,
 				3105A202 /* KernelExploit.swift */,
@@ -465,6 +477,10 @@
 				3105S001,
 				3105S003,
 				3105T001,
+				3105U200,
+				3105U202,
+				3105U204,
+				3105U206,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
