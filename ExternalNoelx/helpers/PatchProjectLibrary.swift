@@ -6,12 +6,16 @@ struct PatchLibraryItem: Identifiable {
     var project: PatchProject?
     var contentKey: Data?
     var packageURL: URL
+    var overrideDisplayName: String?
 
     var id: UUID { summary.packageID }
     var isLocked: Bool { project == nil }
 
     var displayName: String {
-        packageURL.deletingPathExtension().lastPathComponent
+        if let overrideDisplayName, !overrideDisplayName.isEmpty {
+            return overrideDisplayName
+        }
+        return packageURL.deletingPathExtension().lastPathComponent
     }
 
     var workspaceURL: URL? {
@@ -53,7 +57,30 @@ enum PatchProjectLibrary {
         return root
     }
 
-    // MARK: - Install Bundled Packages (Sync by packageID)
+    // MARK: - Display Name Mapping
+
+    private static let displayNameMapKey = "patch.displayNameMap.v1"
+
+    static func loadDisplayNameMap() -> [String: String] {
+        guard let data = UserDefaults.standard.data(forKey: displayNameMapKey),
+              let dict = try? JSONDecoder().decode([String: String].self, from: data) else {
+            return [:]
+        }
+        return dict
+    }
+
+    static func saveDisplayNameMap(_ map: [String: String]) {
+        if let data = try? JSONEncoder().encode(map) {
+            UserDefaults.standard.set(data, forKey: displayNameMapKey)
+        }
+    }
+
+    static func displayName(for packageURL: URL) -> String? {
+        let filename = packageURL.lastPathComponent
+        return loadDisplayNameMap()[filename]
+    }
+
+    // MARK: - Install Bundled Packages
 
     static func installBundledPackagesIfNeeded(
         bundle: Bundle = .main,
@@ -116,7 +143,6 @@ enum PatchProjectLibrary {
 
     // MARK: - Sync from Server
 
-    /// Download patches from server based on device + license
     static func syncPatchesFromServer(
         deviceID: String,
         license: String,
@@ -124,7 +150,6 @@ enum PatchProjectLibrary {
     ) async throws {
         log("patch-sync: starting sync for device \(deviceID.prefix(8))...")
 
-        // Fetch list from server
         let serverPatches = try await APIClient.shared.fetchPatchList(
             deviceID: deviceID,
             license: license
@@ -136,8 +161,8 @@ enum PatchProjectLibrary {
             throw PatchPackageError.invalidProject
         }
 
-        // Track which patches we've seen (for cleanup)
         var syncedFilenames = Set<String>()
+        var displayNameMap = loadDisplayNameMap()
 
         for meta in serverPatches {
             let targetFolder = root.appendingPathComponent(meta.target, isDirectory: true)
@@ -145,7 +170,10 @@ enum PatchProjectLibrary {
             let localURL = targetFolder.appendingPathComponent(meta.filename)
             syncedFilenames.insert(meta.filename)
 
-            // Check if local file exists + checksum matches
+            // Update mapping
+            displayNameMap[meta.filename] = meta.displayName
+
+            // Check existing file
             if fileManager.fileExists(atPath: localURL.path) {
                 if let localData = try? Data(contentsOf: localURL),
                    sha256Hex(localData) == meta.checksum {
@@ -158,7 +186,6 @@ enum PatchProjectLibrary {
                 log("patch-sync: download \(meta.filename) (\(meta.size) bytes)")
             }
 
-            // Download
             do {
                 let data = try await APIClient.shared.downloadPatch(
                     id: meta.id,
@@ -166,23 +193,20 @@ enum PatchProjectLibrary {
                     license: license
                 )
 
-                // Verify checksum
                 let downloadedChecksum = sha256Hex(data)
                 guard downloadedChecksum == meta.checksum else {
-                    log("patch-sync: checksum mismatch for \(meta.filename)! expected=\(meta.checksum.prefix(16)) got=\(downloadedChecksum.prefix(16))")
-                    throw PatchPackageError.invalidProject
+                    log("patch-sync: checksum mismatch for \(meta.filename)")
+                    continue
                 }
 
-                // Write to disk
                 try data.write(to: localURL, options: [.atomic, .completeFileProtection])
                 log("patch-sync: saved \(meta.filename) (\(data.count) bytes)")
             } catch {
                 log("patch-sync: failed to download \(meta.filename): \(error.localizedDescription)")
-                // Continue with other patches — don't fail whole sync
             }
         }
 
-        // Cleanup: remove local patches that are no longer on server
+        // Cleanup orphans
         for folder in ["FF Normal", "FF Max"] {
             let folderURL = root.appendingPathComponent(folder, isDirectory: true)
             guard let files = try? fileManager.contentsOfDirectory(
@@ -194,11 +218,13 @@ enum PatchProjectLibrary {
             for file in files where file.pathExtension.lowercased() == "3105" {
                 if !syncedFilenames.contains(file.lastPathComponent) {
                     try? fileManager.removeItem(at: file)
+                    displayNameMap.removeValue(forKey: file.lastPathComponent)
                     log("patch-sync: removed orphan \(file.lastPathComponent)")
                 }
             }
         }
 
+        saveDisplayNameMap(displayNameMap)
         log("patch-sync: complete — \(syncedFilenames.count) patches synced")
     }
 
@@ -248,11 +274,13 @@ enum PatchProjectLibrary {
                     decoded = try PatchPackageCodec.decode(data, password: nil)
                 }
 
+                let overrideName = displayName(for: url)
                 let item = PatchLibraryItem(
                     summary: summary,
                     project: decoded?.project,
                     contentKey: decoded?.contentKey,
-                    packageURL: url
+                    packageURL: url,
+                    overrideDisplayName: overrideName
                 )
 
                 if summary.schemaVersion >= 2, let project = decoded?.project {
@@ -263,7 +291,7 @@ enum PatchProjectLibrary {
                     }
                 }
                 byID[summary.packageID] = item
-                log("patch: loaded \(url.lastPathComponent)")
+                log("patch: loaded \(overrideName ?? url.lastPathComponent)")
             } catch {
                 log("patch: skipped invalid local package \(url.lastPathComponent)")
             }
@@ -350,6 +378,11 @@ enum PatchProjectLibrary {
     }
 
     static func delete(_ item: PatchLibraryItem, fileManager: FileManager = .default) throws {
+        // Remove from display name map
+        var map = loadDisplayNameMap()
+        map.removeValue(forKey: item.packageURL.lastPathComponent)
+        saveDisplayNameMap(map)
+
         if fileManager.fileExists(atPath: item.packageURL.path) {
             try fileManager.removeItem(at: item.packageURL)
         }
