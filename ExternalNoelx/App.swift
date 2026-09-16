@@ -7,18 +7,16 @@ struct ExternalNoelxApp: App {
     @StateObject private var licenseManager = LicenseManager()
     @StateObject private var patchDraftCoordinator = PatchDraftCoordinator()
     @StateObject private var fileOperationCoordinator = FileOperationCoordinator()
-    @AppStorage(AppLanguage.storageKey) private var languageCode = AppLanguage.english.rawValue
     @AppStorage("selected_target") private var selectedTarget = ""
     @State private var updateOffer: AppUpdateChecker.Offer?
     @Environment(\.scenePhase) private var scenePhase
 
+    // Force English — no language picker anymore
+    private let language: AppLanguage = .english
+
     init() {
         setupLogCapture()
         log("app: External Nixx launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machineName)")
-    }
-
-    private var language: AppLanguage {
-        AppLanguage(rawValue: languageCode) ?? .english
     }
 
     private func checkForUpdate() {
@@ -89,9 +87,9 @@ struct ExternalNoelxApp: App {
             .onChange(of: scenePhase) { phase in
                 guard phase == .active else { return }
 
-                // Hanya verify ulang kalau:
-                // 1. Lisensi belum aktif (user baru / logout), ATAU
-                // 2. Sudah lebih dari 1 jam sejak verify terakhir
+                // Only re-verify if:
+                // 1. License is not active yet (new user / logged out), OR
+                // 2. More than 1 hour since last verify
                 if licenseManager.shouldReverifyOnForeground() {
                     licenseManager.beginLaunchSession()
                 }
