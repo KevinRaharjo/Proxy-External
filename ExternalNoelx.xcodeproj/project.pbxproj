@@ -71,7 +71,6 @@
 		3105K200 /* LicenseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105K100; };
 		3105K201 /* LicenseActivationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105K101; };
 		3105A211 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3105A031; };
-		3105P900 /* Patches in Resources */ = {isa = PBXBuildFile; fileRef = 3105P800; };
 		3105N200 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105N100; };
 		3105N201 /* MaintenanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105N101; };
 		3105Q200 /* PatchFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105Q100; };
@@ -312,7 +311,7 @@
 				3105A025 /* Utils.swift */,
 				3105A026 /* SBX.swift */,
 				3105A027 /* MG.swift */,
-				);
+			);
 			path = helpers;
 			sourceTree = "<group>";
 		};
@@ -394,7 +393,6 @@
 			files = (
 				3105A211,
 				3105A228,
-				3105P900,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
