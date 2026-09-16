@@ -18,7 +18,7 @@ struct ExternalNoelxApp: App {
         setupLogCapture()
         log("app: External Nixx launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machineName)")
 
-        // Ensure patches directory exists (Application Support) + migrate bundled patches (one-time)
+        // Ensure patches directory exists + migrate bundled patches (one-time)
         do {
             _ = try PatchProjectLibrary.ensurePatchesDirectory()
             log("app: patches directory ready")
