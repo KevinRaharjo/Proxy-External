@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var refreshToken = UUID()
     @State private var flagsToken = UUID()
     @State private var selectedCategory: PatchCategory = .aim
+    @State private var lastSyncedLicense: String = ""
 
     @AppStorage("selected_target") private var selectedTarget = "freefireth"
 
@@ -70,6 +71,12 @@ struct ContentView: View {
             patchMessage = "READY — SELECT A PATCH"
             refreshPatchFlags(target: targetFolder)
             ensureValidCategory()
+            syncPatchesFromServer()
+        }
+        .onChange(of: licenseManager.state) { state in
+            if case .active = state {
+                syncPatchesFromServer()
+            }
         }
         .onChange(of: selectedTarget) { newTarget in
             let folder = newTarget == "freefiremax" ? "FF Max" : "FF Normal"
@@ -77,6 +84,7 @@ struct ContentView: View {
             patchMessage = "READY — SELECT A PATCH"
             refreshPatchFlags(target: folder)
             ensureValidCategory()
+            syncPatchesFromServer()
         }
         .onChange(of: scenePhase) { phase in
             guard phase == .active, !patchOperationBusy else { return }
@@ -94,6 +102,34 @@ struct ContentView: View {
                 message: Text(alertMessage),
                 dismissButton: .default(Text("OK"))
             )
+        }
+    }
+
+    // MARK: - Server-side patch sync
+
+    private func syncPatchesFromServer() {
+        guard licenseManager.isActive else {
+            log("patch-sync: license not active, skipping")
+            return
+        }
+        guard let licenseKey = licenseManager.rememberedKey(), !licenseKey.isEmpty else {
+            log("patch-sync: no remembered key, skipping")
+            return
+        }
+        // Don't re-sync same license on every appear
+        guard licenseKey != lastSyncedLicense else {
+            log("patch-sync: already synced for this license")
+            return
+        }
+
+        let deviceID = licenseManager.deviceID
+        lastSyncedLicense = licenseKey
+
+        Task {
+            patchMessage = "SYNCING PATCHES…"
+            await patchStore.syncFromServer(deviceID: deviceID, license: licenseKey)
+            patchMessage = "READY — SELECT A PATCH"
+            ensureValidCategory()
         }
     }
 
