@@ -7,6 +7,7 @@ struct SettingsView: View {
     @EnvironmentObject private var licenseManager: LicenseManager
     @AppStorage(AppLanguage.storageKey) private var languageCode = AppLanguage.english.rawValue
     @AppStorage("selected_target") private var selectedTarget = "freefireth"
+    @AppStorage(AccentStore.storageKey) private var accentRaw = AccentPreset.cyan.rawValue
 
     @State private var showResetAlert = false
     @State private var resetMessage = ""
@@ -15,28 +16,37 @@ struct SettingsView: View {
     @State private var showDeactivateAlert = false
     @State private var showGuestResetAlert = false
     @State private var isResettingGuest = false
+    @State private var expandedVersion: String?
+
+    private var accent: Color {
+        (AccentPreset(rawValue: accentRaw) ?? .cyan).color
+    }
 
     var body: some View {
         NavigationStack {
-            Form {
-                appInfoSection
-                targetGameSection
-                languageSection
-                deviceSection
-                licenseSection
-                guestResetSection
-                versionSupportSection
-                dangerZoneSection
+            ZStack {
+                BP.bg.ignoresSafeArea()
+                ScrollView {
+                    VStack(spacing: 10) {
+                        deviceSection
+                        targetSection
+                        languageSection
+                        accentSection
+                        versionSection
+                        licenseSection
+                        guestSection
+                        dangerSection
+                    }
+                    .padding(12)
+                }
             }
-            .scrollContentBackground(.hidden)
-            .background(AppTheme.pageBackground.ignoresSafeArea())
-            .navigationTitle(language.text("settings.title"))
+            .navigationTitle("SETTINGS")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(language.text("common.done")) { dismiss() }
-                        .fontWeight(.semibold)
-                        .foregroundStyle(AppTheme.accentBright)
+                    Button("DONE") { dismiss() }
+                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                        .foregroundStyle(accent)
                 }
             }
             .alert("Reset Patches", isPresented: $showResetAlert) {
@@ -55,13 +65,13 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) { }
                 Button("Deactivate", role: .destructive) { licenseManager.deactivate() }
             } message: {
-                Text("Are you sure you want to remove the activation from this device? You can re-activate with the same key on another device.")
+                Text("Are you sure you want to remove the activation from this device?")
             }
             .alert("Reset Guest FF", isPresented: $showGuestResetAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Reset", role: .destructive) { performGuestReset() }
             } message: {
-                Text("This will delete FF guest account data so FF creates a fresh guest.\n\nMake sure FF is CLOSED from App Switcher first.\n\nContinue?")
+                Text("This will delete FF guest account data so FF creates a fresh guest.\n\nMake sure FF is CLOSED first.")
             }
             .alert("Result", isPresented: $showResultAlert) {
                 Button("OK") { resetMessage = "" }
@@ -71,226 +81,303 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Sections
+    // MARK: - 01 DEVICE (info aja, tanpa status)
 
-    @ViewBuilder
-    private var appInfoSection: some View {
-        Section {
-            HStack(spacing: 14) {
-                AppLogo(size: 46)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("External Nixx")
-                        .font(.system(size: 17, weight: .black, design: .rounded))
-                        .foregroundStyle(AppTheme.silver)
-                    Text(language.text("common.version", appVersion))
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.silverDim)
-                }
-                Spacer()
-            }
-            .padding(.vertical, 6)
-            .listRowBackground(AppTheme.surface)
-        }
-    }
-
-    @ViewBuilder
-    private var targetGameSection: some View {
-        Section {
-            Picker("Target Game", selection: $selectedTarget) {
-                Text("FF Normal").tag("freefireth")
-                Text("FF Max").tag("freefiremax")
-            }
-            .pickerStyle(.segmented)
-            .listRowBackground(AppTheme.surface)
-        } header: {
-            Text("Target Game").foregroundStyle(AppTheme.accentBright)
-        } footer: {
-            Text("Choose the game you want to patch. Patches will load based on the selected target.")
-                .foregroundStyle(AppTheme.silverDim)
-        }
-    }
-
-    @ViewBuilder
-    private var languageSection: some View {
-        Section(language.text("settings.language")) {
-            Picker(language.text("settings.language"), selection: $languageCode) {
-                ForEach(AppLanguage.allCases) { option in
-                    Text(option.displayName).tag(option.rawValue)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .listRowBackground(AppTheme.surface)
-        }
-    }
-
-    @ViewBuilder
     private var deviceSection: some View {
-        Section(language.text("common.device")) {
-            LabeledContent(
-                language.text("dashboard.hardware_model"),
-                value: AppInfo.displayMachineName
-            )
-            LabeledContent(
-                language.text("settings.ios_version"),
-                value: "\(AppInfo.osVersion) (\(AppInfo.osBuild))"
-            )
-            LabeledContent("Device ID") { deviceIDText }
+        BPSection(index: 1, title: "Device", accentColor: accent) {
+            VStack(alignment: .leading, spacing: 8) {
+                deviceRow("Hardware", AppInfo.displayMachineName)
+                deviceRow("iOS", "\(AppInfo.osVersion) (\(AppInfo.osBuild))")
+                deviceRow("Device ID", String(licenseManager.deviceID.prefix(16)) + "...")
+            }
         }
     }
 
-    @ViewBuilder
-    private var deviceIDText: some View {
-        let rawID: String = licenseManager.deviceID
-        let shortID: String = String(rawID.prefix(16))
-        let display: String = shortID + "..."
-        Text(display)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
-            .foregroundStyle(AppTheme.silverDim)
-    }
-
-    @ViewBuilder
-    private var licenseSection: some View {
-        Section {
-            licenseStatusRow
-            if let expiry = licenseManager.expirationDate {
-                LabeledContent("Expires") {
-                    Text(expiry, style: .date)
-                        .foregroundStyle(AppTheme.silverDim)
-                }
-            }
-            Button {
-                showDeactivateAlert = true
-            } label: {
-                Label("Deactivate License", systemImage: "key.slash.fill")
-                    .foregroundStyle(AppTheme.warning)
-            }
-        } header: {
-            Text("License").foregroundStyle(AppTheme.accentBright)
-        } footer: {
-            Text("Deactivate will remove the activation from this device. You can re-activate with the same key on another device.")
-                .foregroundStyle(AppTheme.silverDim)
-        }
-    }
-
-    @ViewBuilder
-    private var licenseStatusRow: some View {
-        let isActive: Bool = licenseManager.isActive
+    private func deviceRow(_ label: String, _ value: String) -> some View {
         HStack {
-            Image(systemName: isActive ? "checkmark.seal.fill" : "xmark.seal.fill")
-                .foregroundStyle(isActive ? AppTheme.success : AppTheme.danger)
-                .frame(width: 24)
-            Text(isActive ? "Active" : "Inactive")
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(AppTheme.silver)
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                .tracking(1.0)
+                .foregroundStyle(BP.textFaint)
             Spacer()
+            Text(value)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(BP.text)
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
     }
 
-    // MARK: - Guest Reset
+    // MARK: - 02 TARGET GAME
 
-    @ViewBuilder
-    private var guestResetSection: some View {
-        Section {
-            let ff = FFGuestReset.isFFInstalled()
-
-            HStack(spacing: 10) {
-                Image(systemName: ff.normal || ff.max
-                      ? "checkmark.circle.fill"
-                      : "xmark.circle.fill")
-                    .foregroundStyle(ff.normal || ff.max ? .green : .secondary)
-                Text(ff.normal || ff.max ? "FF installed" : "FF not installed")
-                    .font(.subheadline)
-                Spacer()
-                if ff.normal { Text("Normal").font(.caption).foregroundStyle(.secondary) }
-                if ff.max { Text("Max").font(.caption).foregroundStyle(.secondary) }
+    private var targetSection: some View {
+        BPSection(index: 2, title: "Target Game", accentColor: accent) {
+            HStack(spacing: 8) {
+                targetButton("FF NORMAL", value: "freefireth")
+                targetButton("FF MAX", value: "freefiremax")
             }
+        }
+    }
 
-            Button(role: .destructive) {
-                showGuestResetAlert = true
-            } label: {
-                HStack(spacing: 10) {
-                    if isResettingGuest {
-                        ProgressView().scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "arrow.counterclockwise.circle.fill")
+    private func targetButton(_ label: String, value: String) -> some View {
+        Button {
+            selectedTarget = value
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } label: {
+            Text(label)
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .tracking(1.2)
+                .foregroundStyle(selectedTarget == value ? BP.bg : BP.textDim)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .background(selectedTarget == value ? accent : BP.panelHi)
+                .overlay(Rectangle().stroke(selectedTarget == value ? accent : BP.lineBright, lineWidth: 0.8))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - 03 LANGUAGE
+
+    private var languageSection: some View {
+        BPSection(index: 3, title: "Language", accentColor: accent) {
+            HStack(spacing: 6) {
+                ForEach(AppLanguage.allCases) { lang in
+                    Button {
+                        languageCode = lang.rawValue
+                    } label: {
+                        Text(shortLang(lang))
+                            .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                            .tracking(1.0)
+                            .foregroundStyle(languageCode == lang.rawValue ? BP.bg : BP.textDim)
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .background(languageCode == lang.rawValue ? accent : BP.panelHi)
+                            .overlay(Rectangle().stroke(languageCode == lang.rawValue ? accent : BP.lineBright, lineWidth: 0.8))
                     }
-                    Text(isResettingGuest ? "Resetting..." : "Reset Guest FF")
-                        .fontWeight(.semibold)
+                    .buttonStyle(.plain)
                 }
             }
-            .disabled((!ff.normal && !ff.max) || isResettingGuest)
-        } header: {
-            Label("Guest Reset", systemImage: "person.crop.circle.badge.xmark")
-                .foregroundStyle(AppTheme.accentBright)
-        } footer: {
-            Text("Deletes the old FF guest account so FF creates a new one. Useful for soft bans (7 days / 30 days).\n\n⚠️ Close FF from App Switcher before resetting.")
-                .foregroundStyle(AppTheme.silverDim)
         }
     }
 
-    @ViewBuilder
-    private var versionSupportSection: some View {
-        Section {
-            HStack {
-                Text(language.text("settings.current_version"))
-                Spacer()
-                supportStatusText
+    private func shortLang(_ lang: AppLanguage) -> String {
+        switch lang {
+        case .english: return "EN"
+        case .vietnamese: return "VI"
+        case .simplifiedChinese: return "中文"
+        }
+    }
+
+    // MARK: - 04 ACCENT COLOR
+
+    private var accentSection: some View {
+        BPSection(index: 4, title: "Accent Color", accentColor: accent) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 70), spacing: 8)], spacing: 8) {
+                ForEach(AccentPreset.allCases) { preset in
+                    Button {
+                        accentRaw = preset.rawValue
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        VStack(spacing: 6) {
+                            Circle()
+                                .fill(preset.color)
+                                .frame(width: 22, height: 22)
+                                .overlay(
+                                    Circle().stroke(Color.white.opacity(accentRaw == preset.rawValue ? 1 : 0), lineWidth: 2)
+                                )
+                            Text(preset.displayName.uppercased())
+                                .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                                .tracking(1.0)
+                                .foregroundStyle(accentRaw == preset.rawValue ? preset.color : BP.textFaint)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 58)
+                        .background(BP.panelHi)
+                        .overlay(Rectangle().stroke(
+                            accentRaw == preset.rawValue ? preset.color : BP.lineBright,
+                            lineWidth: accentRaw == preset.rawValue ? 1.2 : 0.5
+                        ))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            LabeledContent("iOS 17", value: ExploitSupportPolicy.verifiedIOS17Range)
-            LabeledContent("iOS 18", value: ExploitSupportPolicy.verifiedIOS18Range)
-            LabeledContent("iOS 26", value: ExploitSupportPolicy.verifiedIOS26Range)
-        } header: {
-            Text(language.text("settings.verified_versions")).foregroundStyle(AppTheme.accentBright)
         }
     }
 
-    @ViewBuilder
-    private var supportStatusText: some View {
-        let isSupported: Bool = appState.isSupported
-        let key: String = isSupported ? "settings.supported" : "settings.unsupported"
-        Text(language.text(key))
-            .fontWeight(.bold)
-            .foregroundStyle(isSupported ? AppTheme.success : AppTheme.danger)
+    // MARK: - 05 VERSION SUPPORT (version-aware)
+
+    private var versionSection: some View {
+        BPSection(index: 5, title: "Version Support", accentColor: accent) {
+            VStack(spacing: 0) {
+                let current = currentIOSMajor()
+                versionRow(
+                    major: current,
+                    range: rangeFor(major: current),
+                    isCurrent: true
+                )
+                ForEach(otherVersions(current: current), id: \.self) { major in
+                    versionRow(
+                        major: major,
+                        range: rangeFor(major: major),
+                        isCurrent: false
+                    )
+                }
+            }
+        }
     }
 
-    @ViewBuilder
-    private var dangerZoneSection: some View {
-        Section {
+    private func versionRow(major: Int, range: String, isCurrent: Bool) -> some View {
+        let isExpanded = expandedVersion == "iOS \(major)" || isCurrent
+        return VStack(spacing: 0) {
             Button {
-                showResetAlert = true
+                if !isCurrent {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        expandedVersion = (expandedVersion == "iOS \(major)") ? nil : "iOS \(major)"
+                    }
+                }
             } label: {
-                Label("Reset All Patches", systemImage: "trash.fill")
-                    .foregroundStyle(AppTheme.danger)
+                HStack(spacing: 8) {
+                    if isCurrent {
+                        Circle().fill(accent).frame(width: 6, height: 6)
+                    } else {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(BP.textFaint)
+                            .frame(width: 6)
+                    }
+                    Text("iOS \(major)")
+                        .font(.system(size: 11, weight: isCurrent ? .heavy : .medium, design: .monospaced))
+                        .tracking(1.0)
+                        .foregroundStyle(isCurrent ? accent : BP.textDim)
+                    Spacer()
+                    Text(range)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(BP.textFaint)
+                    if isCurrent {
+                        BPBadge(text: "YOU", color: accent)
+                    }
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 10)
+                .contentShape(Rectangle())
             }
-            Button {
-                showRestartAlert = true
-            } label: {
-                Label("Reset All Data (Clean Install)", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(AppTheme.danger)
+            .buttonStyle(.plain)
+
+            if !isCurrent && isExpanded {
+                Text("Supported build range: \(range)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(BP.textFaint)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-        } header: {
-            Text("Danger Zone").foregroundStyle(AppTheme.danger)
-        } footer: {
-            Text("Reset All Patches will remove all patch backups and reset patch states.\nReset All Data will remove everything including license.")
-                .foregroundStyle(AppTheme.silverDim)
+
+            if major != otherVersions(current: currentIOSMajor()).last {
+                Rectangle().fill(BP.line).frame(height: 0.5)
+            }
         }
     }
 
-    // MARK: - Helpers
-
-    private var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "AppReleaseDisplayVersion") as? String
-            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-            ?? "1.0"
+    private func currentIOSMajor() -> Int {
+        AppInfo.versionTuple.major
     }
+
+    private func rangeFor(major: Int) -> String {
+        switch major {
+        case 17: return ExploitSupportPolicy.verifiedIOS17Range
+        case 18: return ExploitSupportPolicy.verifiedIOS18Range
+        case 26: return ExploitSupportPolicy.verifiedIOS26Range
+        default: return "Unsupported"
+        }
+    }
+
+    private func otherVersions(current: Int) -> [Int] {
+        [17, 18, 26].filter { $0 != current }
+    }
+
+    // MARK: - 06 LICENSE
+
+    private var licenseSection: some View {
+        BPSection(index: 6, title: "License", accentColor: accent) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Image(systemName: licenseManager.isActive ? "checkmark.seal.fill" : "xmark.seal.fill")
+                        .foregroundStyle(licenseManager.isActive ? BP.success : BP.danger)
+                    Text(licenseManager.isActive ? "ACTIVE" : "INACTIVE")
+                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                        .tracking(1.2)
+                        .foregroundStyle(licenseManager.isActive ? BP.success : BP.danger)
+                    Spacer()
+                    if let expiry = licenseManager.expirationDate {
+                        Text(expiry, style: .date)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(BP.textFaint)
+                    }
+                }
+                Button {
+                    showDeactivateAlert = true
+                } label: {
+                    Text("DEACTIVATE")
+                }
+                .buttonStyle(BPButtonStyle(color: BP.warning))
+            }
+        }
+    }
+
+    // MARK: - 07 GUEST RESET
+
+    private var guestSection: some View {
+        BPSection(index: 7, title: "Guest Reset", accentColor: accent) {
+            let ff = FFGuestReset.isFFInstalled()
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: ff.normal || ff.max ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundStyle(ff.normal || ff.max ? BP.success : BP.textFaint)
+                    Text(ff.normal || ff.max ? "FF INSTALLED" : "FF NOT INSTALLED")
+                        .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                        .tracking(1.0)
+                        .foregroundStyle(BP.textDim)
+                    Spacer()
+                    if ff.normal { BPBadge(text: "NORMAL", color: accent) }
+                    if ff.max { BPBadge(text: "MAX", color: BP.warning) }
+                }
+                Button {
+                    showGuestResetAlert = true
+                } label: {
+                    HStack(spacing: 6) {
+                        if isResettingGuest { ProgressView().scaleEffect(0.7) }
+                        Text(isResettingGuest ? "RESETTING..." : "RESET GUEST FF")
+                    }
+                }
+                .buttonStyle(BPButtonStyle(color: BP.danger))
+                .disabled((!ff.normal && !ff.max) || isResettingGuest)
+            }
+        }
+    }
+
+    // MARK: - 08 DANGER ZONE
+
+    private var dangerSection: some View {
+        BPSection(index: 8, title: "Danger Zone", accentColor: BP.danger) {
+            VStack(spacing: 8) {
+                Button { showResetAlert = true } label: {
+                    Text("RESET ALL PATCHES")
+                }
+                .buttonStyle(BPButtonStyle(color: BP.danger))
+
+                Button { showRestartAlert = true } label: {
+                    Text("RESET ALL DATA")
+                }
+                .buttonStyle(BPButtonStyle(color: BP.danger, filled: true))
+            }
+        }
+    }
+
+    // MARK: - Actions (fungsi lama tetap)
 
     private func performResetPatches() {
         do {
             try DevicePatchService.resetAllPatches()
             UserDefaults.standard.removeObject(forKey: "aimDragEnabled")
             UserDefaults.standard.removeObject(forKey: "aimNeckEnabled")
-            UserDefaults.standard.removeObject(forKey: "hspeitoffEnabled")
+            UserDefaults.standard.removeObject(forKey: "hспеitoffEnabled")
             UserDefaults.standard.removeObject(forKey: "aimBodyPackageEnabled")
             UserDefaults.standard.removeObject(forKey: "aimChestPackageEnabled")
             UserDefaults.standard.removeObject(forKey: "magicEnabled")
