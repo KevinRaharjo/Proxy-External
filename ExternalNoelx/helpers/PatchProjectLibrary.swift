@@ -9,7 +9,6 @@ struct PatchLibraryItem: Identifiable {
     var id: UUID { summary.packageID }
     var isLocked: Bool { project == nil }
 
-    /// Always use the filename — ignore `project.name` from inside the package.
     var displayName: String {
         packageURL.deletingPathExtension().lastPathComponent
     }
@@ -37,6 +36,15 @@ enum PatchProjectLibrary {
         return root
     }
 
+    static func ensurePatchesDirectory(fileManager: FileManager = .default) throws -> URL {
+        let root = try packageRootURL(fileManager: fileManager)
+        for folder in ["FF Normal", "FF Max"] {
+            let sub = root.appendingPathComponent(folder, isDirectory: true)
+            try fileManager.createDirectory(at: sub, withIntermediateDirectories: true)
+        }
+        return root
+    }
+
     static func backupRootURL(fileManager: FileManager = .default) throws -> URL {
         let root = try packageRootURL(fileManager: fileManager)
             .appendingPathComponent("Backups", isDirectory: true)
@@ -45,6 +53,7 @@ enum PatchProjectLibrary {
     }
 
     // MARK: - Install Bundled Packages (Sync by packageID)
+
     static func installBundledPackagesIfNeeded(
         bundle: Bundle = .main,
         fileManager: FileManager = .default
@@ -54,6 +63,61 @@ enum PatchProjectLibrary {
             return
         }
 
+        // ═══════════════════════════════════════════════════════════
+        // MIGRASI: Copy dari bundle ke Application Support (sekali aja)
+        // ═══════════════════════════════════════════════════════════
+        let migrationKey = "patches.migratedToAppSupport.v1"
+        let alreadyMigrated = UserDefaults.standard.bool(forKey: migrationKey)
+
+        if !alreadyMigrated {
+            let bundledPatches = bundle.bundleURL.appendingPathComponent("Patches", isDirectory: true)
+            if fileManager.fileExists(atPath: bundledPatches.path) {
+                do {
+                    let bundledFiles = try fileManager.contentsOfDirectory(
+                        at: bundledPatches,
+                        includingPropertiesForKeys: [.isDirectoryKey],
+                        options: [.skipsHiddenFiles]
+                    )
+                    for subfolder in bundledFiles {
+                        let values = try subfolder.resourceValues(forKeys: [.isDirectoryKey])
+                        guard values.isDirectory == true else { continue }
+
+                        let targetFolder = root.appendingPathComponent(
+                            subfolder.lastPathComponent,
+                            isDirectory: true
+                        )
+                        try fileManager.createDirectory(
+                            at: targetFolder,
+                            withIntermediateDirectories: true
+                        )
+
+                        let patchFiles = try fileManager.contentsOfDirectory(
+                            at: subfolder,
+                            includingPropertiesForKeys: nil,
+                            options: [.skipsHiddenFiles]
+                        )
+                        for patchFile in patchFiles where patchFile.pathExtension.lowercased() == "3105" {
+                            let dest = targetFolder.appendingPathComponent(patchFile.lastPathComponent)
+                            if !fileManager.fileExists(atPath: dest.path) {
+                                try fileManager.copyItem(at: patchFile, to: dest)
+                                log("patch: migrated \(patchFile.lastPathComponent) → \(subfolder.lastPathComponent)/")
+                            }
+                        }
+                    }
+                    UserDefaults.standard.set(true, forKey: migrationKey)
+                    log("patch: migration from bundle to Application Support complete")
+                } catch {
+                    log("patch: migration failed: \(error.localizedDescription)")
+                }
+            } else {
+                log("patch: no bundled Patches/ folder found (clean IPA)")
+                UserDefaults.standard.set(true, forKey: migrationKey)
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // SYNC: Sync bundled resources yang masih ada (fallback)
+        // ═══════════════════════════════════════════════════════════
         var totalInstalled = 0
         var totalReplaced = 0
         var totalRemoved = 0
@@ -74,7 +138,6 @@ enum PatchProjectLibrary {
             totalRemoved   += result.removed
         }
 
-        // Fallback: .3105 files without subdirectory
         let fallbackURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: nil) ?? []
         for sourceURL in fallbackURLs {
             let filename = sourceURL.lastPathComponent
@@ -123,7 +186,6 @@ enum PatchProjectLibrary {
         log("patch: sync done — installed=\(totalInstalled), replaced=\(totalReplaced), removed=\(totalRemoved)")
     }
 
-    /// Sync a single target folder — replace by packageID + cleanup orphans
     private static func syncSubdirectory(
         _ subdirectory: String,
         targetFolder: String,
@@ -142,7 +204,6 @@ enum PatchProjectLibrary {
             return (0, 0, 0)
         }
 
-        // Map packageID → (url, data) from bundle
         var bundleByPackageID: [UUID: (url: URL, data: Data)] = [:]
         for sourceURL in bundledURLs {
             do {
@@ -154,7 +215,6 @@ enum PatchProjectLibrary {
             }
         }
 
-        // Cleanup: remove files in app whose packageID is not in new bundle
         var removed = 0
         if let existing = try? fileManager.contentsOfDirectory(
             at: targetRoot,
@@ -164,13 +224,11 @@ enum PatchProjectLibrary {
             for existingURL in existing where existingURL.pathExtension.lowercased() == "3105" {
                 guard let data = try? Data(contentsOf: existingURL, options: .mappedIfSafe),
                       let summary = try? PatchPackageCodec.inspect(data) else {
-                    // Corrupt file → delete
                     try? fileManager.removeItem(at: existingURL)
                     removed += 1
                     continue
                 }
                 if bundleByPackageID[summary.packageID] == nil {
-                    // Patch not in bundle anymore → delete
                     try? fileManager.removeItem(at: existingURL)
                     try? PatchKeyStore.delete(for: summary)
                     log("patch: removed orphan \(existingURL.lastPathComponent)")
@@ -179,7 +237,6 @@ enum PatchProjectLibrary {
             }
         }
 
-        // Install / replace
         var installed = 0
         var replaced = 0
         for (packageID, entry) in bundleByPackageID {
@@ -194,13 +251,10 @@ enum PatchProjectLibrary {
             )
 
             if let existingURL {
-                // Already exists — check if data is identical
                 if let existingData = try? Data(contentsOf: existingURL, options: .mappedIfSafe),
                    existingData == entry.data {
-                    // Identical — skip
                     continue
                 }
-                // Different → replace
                 if existingURL.path != destinationURL.path {
                     try? fileManager.removeItem(at: existingURL)
                 }
@@ -212,7 +266,6 @@ enum PatchProjectLibrary {
                     log("patch: failed replace \(filename): \(error)")
                 }
             } else {
-                // Not yet installed → install
                 do {
                     try entry.data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
                     installed += 1
@@ -226,7 +279,6 @@ enum PatchProjectLibrary {
         return (installed, replaced, removed)
     }
 
-    /// Find existing .3105 file in app by packageID
     private static func findExistingPackageURL(
         packageID: UUID,
         targetFolder: String,
@@ -250,7 +302,8 @@ enum PatchProjectLibrary {
         return nil
     }
 
-    // MARK: - Load Patches (Filter by Target)
+    // MARK: - Load Patches
+
     static func load(target: String = "FF Normal", fileManager: FileManager = .default) -> [PatchLibraryItem] {
         guard let root = try? packageRootURL(fileManager: fileManager) else { return [] }
 
