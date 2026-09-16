@@ -28,7 +28,6 @@ struct ContentView: View {
         patchStore.items.filter { $0.category == selectedCategory }
     }
 
-    /// Kategori yang punya minimal 1 patch
     private var availableCategories: [PatchCategory] {
         PatchCategory.allCases.filter { category in
             patchStore.items.contains(where: { $0.category == category })
@@ -86,7 +85,7 @@ struct ContentView: View {
             refreshPatchFlags(target: targetFolder)
             ensureValidCategory()
         }
-        .onChange(of: patchStore.items) { _ in
+        .onChange(of: patchStore.items.count) { _ in
             ensureValidCategory()
         }
         .alert(isPresented: $showAlert) {
@@ -98,7 +97,6 @@ struct ContentView: View {
         }
     }
 
-    /// Kalo selectedCategory kosong, pindah ke kategori pertama yang ada isinya
     private func ensureValidCategory() {
         let available = availableCategories
         guard !available.isEmpty else { return }
@@ -201,20 +199,17 @@ struct ContentView: View {
         .padding(.vertical, 4)
     }
 
-    // MARK: - Category selector (dynamic — cuma nampilin kategori yang ada isinya)
+    // MARK: - Category selector
 
     @ViewBuilder
     private var categorySelector: some View {
         let available = availableCategories
 
         if available.isEmpty {
-            // gak ada kategori yang ada isinya → selector gak muncul
             EmptyView()
         } else if available.count == 1 {
-            // cuma 1 kategori → tampilin sebagai label
             singleCategoryLabel(available[0])
         } else {
-            // 2+ kategori → tampilin selector normal
             HStack(spacing: 0) {
                 ForEach(available) { category in
                     categoryPill(category)
