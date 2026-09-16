@@ -79,9 +79,10 @@ struct SettingsView: View {
                 Text(resetMessage)
             }
         }
+        .preferredColorScheme(.dark)
     }
 
-    // MARK: - 01 DEVICE (info aja, tanpa status)
+    // MARK: - 01 DEVICE
 
     private var deviceSection: some View {
         BPSection(index: 1, title: "Device", accentColor: accent) {
@@ -89,6 +90,7 @@ struct SettingsView: View {
                 deviceRow("Hardware", AppInfo.displayMachineName)
                 deviceRow("iOS", "\(AppInfo.osVersion) (\(AppInfo.osBuild))")
                 deviceRow("Device ID", String(licenseManager.deviceID.prefix(16)) + "...")
+                deviceRow("Target", selectedTarget == "freefiremax" ? "FF Max" : "FF Normal")
             }
         }
     }
@@ -225,6 +227,8 @@ struct SettingsView: View {
 
     private func versionRow(major: Int, range: String, isCurrent: Bool) -> some View {
         let isExpanded = expandedVersion == "iOS \(major)" || isCurrent
+        let otherVersionsList = otherVersions(current: currentIOSMajor())
+
         return VStack(spacing: 0) {
             Button {
                 if !isCurrent {
@@ -269,7 +273,7 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if major != otherVersions(current: currentIOSMajor()).last {
+            if major != otherVersionsList.last {
                 Rectangle().fill(BP.line).frame(height: 0.5)
             }
         }
@@ -377,7 +381,7 @@ struct SettingsView: View {
             try DevicePatchService.resetAllPatches()
             UserDefaults.standard.removeObject(forKey: "aimDragEnabled")
             UserDefaults.standard.removeObject(forKey: "aimNeckEnabled")
-            UserDefaults.standard.removeObject(forKey: "hспеitoffEnabled")
+            UserDefaults.standard.removeObject(forKey: "hspeitoffEnabled")
             UserDefaults.standard.removeObject(forKey: "aimBodyPackageEnabled")
             UserDefaults.standard.removeObject(forKey: "aimChestPackageEnabled")
             UserDefaults.standard.removeObject(forKey: "magicEnabled")
