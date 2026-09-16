@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 struct PatchLibraryItem: Identifiable {
     let summary: PatchPackageSummary
@@ -63,9 +64,6 @@ enum PatchProjectLibrary {
             return
         }
 
-        // ═══════════════════════════════════════════════════════════
-        // MIGRASI: Copy dari bundle ke Application Support (sekali aja)
-        // ═══════════════════════════════════════════════════════════
         let migrationKey = "patches.migratedToAppSupport.v1"
         let alreadyMigrated = UserDefaults.standard.bool(forKey: migrationKey)
 
@@ -100,7 +98,7 @@ enum PatchProjectLibrary {
                             let dest = targetFolder.appendingPathComponent(patchFile.lastPathComponent)
                             if !fileManager.fileExists(atPath: dest.path) {
                                 try fileManager.copyItem(at: patchFile, to: dest)
-                                log("patch: migrated \(patchFile.lastPathComponent) → \(subfolder.lastPathComponent)/")
+                                log("patch: migrated \(patchFile.lastPathComponent)")
                             }
                         }
                     }
@@ -114,192 +112,99 @@ enum PatchProjectLibrary {
                 UserDefaults.standard.set(true, forKey: migrationKey)
             }
         }
+    }
 
-        // ═══════════════════════════════════════════════════════════
-        // SYNC: Sync bundled resources yang masih ada (fallback)
-        // ═══════════════════════════════════════════════════════════
-        var totalInstalled = 0
-        var totalReplaced = 0
-        var totalRemoved = 0
+    // MARK: - Sync from Server
 
-        for (subdirectory, targetFolder) in [
-            ("Patches/FF Normal", "FF Normal"),
-            ("Patches/FF Max",    "FF Max")
-        ] {
-            let result = syncSubdirectory(
-                subdirectory,
-                targetFolder: targetFolder,
-                root: root,
-                bundle: bundle,
-                fileManager: fileManager
-            )
-            totalInstalled += result.installed
-            totalReplaced  += result.replaced
-            totalRemoved   += result.removed
+    /// Download patches from server based on device + license
+    static func syncPatchesFromServer(
+        deviceID: String,
+        license: String,
+        fileManager: FileManager = .default
+    ) async throws {
+        log("patch-sync: starting sync for device \(deviceID.prefix(8))...")
+
+        // Fetch list from server
+        let serverPatches = try await APIClient.shared.fetchPatchList(
+            deviceID: deviceID,
+            license: license
+        )
+
+        log("patch-sync: server returned \(serverPatches.count) patches")
+
+        guard let root = try? packageRootURL(fileManager: fileManager) else {
+            throw PatchPackageError.invalidProject
         }
 
-        let fallbackURLs = bundle.urls(forResourcesWithExtension: "3105", subdirectory: nil) ?? []
-        for sourceURL in fallbackURLs {
-            let filename = sourceURL.lastPathComponent
-            let targetFolder: String
-            if filename.hasPrefix("FFM ") {
-                targetFolder = "FF Max"
-            } else {
-                targetFolder = "FF Normal"
-            }
-            let targetRoot = root.appendingPathComponent(targetFolder, isDirectory: true)
-            try? fileManager.createDirectory(at: targetRoot, withIntermediateDirectories: true)
-            let destinationURL = targetRoot.appendingPathComponent(filename)
+        // Track which patches we've seen (for cleanup)
+        var syncedFilenames = Set<String>()
 
-            do {
-                let data = try Data(contentsOf: sourceURL, options: .mappedIfSafe)
-                let newSummary = try PatchPackageCodec.inspect(data)
+        for meta in serverPatches {
+            let targetFolder = root.appendingPathComponent(meta.target, isDirectory: true)
+            try fileManager.createDirectory(at: targetFolder, withIntermediateDirectories: true)
+            let localURL = targetFolder.appendingPathComponent(meta.filename)
+            syncedFilenames.insert(meta.filename)
 
-                if let existingURL = findExistingPackageURL(
-                    packageID: newSummary.packageID,
-                    targetFolder: targetFolder,
-                    root: root,
-                    fileManager: fileManager
-                ) {
-                    if existingURL.path != destinationURL.path {
-                        try? fileManager.removeItem(at: existingURL)
-                        try data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
-                        totalReplaced += 1
-                    } else {
-                        if let existingData = try? Data(contentsOf: existingURL, options: .mappedIfSafe),
-                           existingData != data {
-                            try data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
-                            totalReplaced += 1
-                        }
-                    }
+            // Check if local file exists + checksum matches
+            if fileManager.fileExists(atPath: localURL.path) {
+                if let localData = try? Data(contentsOf: localURL),
+                   sha256Hex(localData) == meta.checksum {
+                    log("patch-sync: skip \(meta.filename) (up to date)")
+                    continue
                 } else {
-                    if !fileManager.fileExists(atPath: destinationURL.path) {
-                        try data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
-                        totalInstalled += 1
-                    }
-                }
-            } catch {
-                log("patch: skipped fallback \(filename): \(error)")
-            }
-        }
-
-        log("patch: sync done — installed=\(totalInstalled), replaced=\(totalReplaced), removed=\(totalRemoved)")
-    }
-
-    private static func syncSubdirectory(
-        _ subdirectory: String,
-        targetFolder: String,
-        root: URL,
-        bundle: Bundle,
-        fileManager: FileManager
-    ) -> (installed: Int, replaced: Int, removed: Int) {
-        let targetRoot = root.appendingPathComponent(targetFolder, isDirectory: true)
-        try? fileManager.createDirectory(at: targetRoot, withIntermediateDirectories: true)
-
-        guard let bundledURLs = bundle.urls(
-            forResourcesWithExtension: "3105",
-            subdirectory: subdirectory
-        ) else {
-            log("patch: no files in bundle subdirectory '\(subdirectory)'")
-            return (0, 0, 0)
-        }
-
-        var bundleByPackageID: [UUID: (url: URL, data: Data)] = [:]
-        for sourceURL in bundledURLs {
-            do {
-                let data = try Data(contentsOf: sourceURL, options: .mappedIfSafe)
-                let summary = try PatchPackageCodec.inspect(data)
-                bundleByPackageID[summary.packageID] = (sourceURL, data)
-            } catch {
-                log("patch: skip bundled \(sourceURL.lastPathComponent): \(error)")
-            }
-        }
-
-        var removed = 0
-        if let existing = try? fileManager.contentsOfDirectory(
-            at: targetRoot,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
-        ) {
-            for existingURL in existing where existingURL.pathExtension.lowercased() == "3105" {
-                guard let data = try? Data(contentsOf: existingURL, options: .mappedIfSafe),
-                      let summary = try? PatchPackageCodec.inspect(data) else {
-                    try? fileManager.removeItem(at: existingURL)
-                    removed += 1
-                    continue
-                }
-                if bundleByPackageID[summary.packageID] == nil {
-                    try? fileManager.removeItem(at: existingURL)
-                    try? PatchKeyStore.delete(for: summary)
-                    log("patch: removed orphan \(existingURL.lastPathComponent)")
-                    removed += 1
-                }
-            }
-        }
-
-        var installed = 0
-        var replaced = 0
-        for (packageID, entry) in bundleByPackageID {
-            let filename = entry.url.lastPathComponent
-            let destinationURL = targetRoot.appendingPathComponent(filename)
-
-            let existingURL = findExistingPackageURL(
-                packageID: packageID,
-                targetFolder: targetFolder,
-                root: root,
-                fileManager: fileManager
-            )
-
-            if let existingURL {
-                if let existingData = try? Data(contentsOf: existingURL, options: .mappedIfSafe),
-                   existingData == entry.data {
-                    continue
-                }
-                if existingURL.path != destinationURL.path {
-                    try? fileManager.removeItem(at: existingURL)
-                }
-                do {
-                    try entry.data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
-                    replaced += 1
-                    log("patch: replaced \(targetFolder)/\(filename)")
-                } catch {
-                    log("patch: failed replace \(filename): \(error)")
+                    log("patch-sync: update \(meta.filename) (checksum mismatch)")
                 }
             } else {
-                do {
-                    try entry.data.write(to: destinationURL, options: [.atomic, .completeFileProtection])
-                    installed += 1
-                    log("patch: installed \(targetFolder)/\(filename)")
-                } catch {
-                    log("patch: failed install \(filename): \(error)")
+                log("patch-sync: download \(meta.filename) (\(meta.size) bytes)")
+            }
+
+            // Download
+            do {
+                let data = try await APIClient.shared.downloadPatch(
+                    id: meta.id,
+                    deviceID: deviceID,
+                    license: license
+                )
+
+                // Verify checksum
+                let downloadedChecksum = sha256Hex(data)
+                guard downloadedChecksum == meta.checksum else {
+                    log("patch-sync: checksum mismatch for \(meta.filename)! expected=\(meta.checksum.prefix(16)) got=\(downloadedChecksum.prefix(16))")
+                    throw PatchPackageError.invalidProject
+                }
+
+                // Write to disk
+                try data.write(to: localURL, options: [.atomic, .completeFileProtection])
+                log("patch-sync: saved \(meta.filename) (\(data.count) bytes)")
+            } catch {
+                log("patch-sync: failed to download \(meta.filename): \(error.localizedDescription)")
+                // Continue with other patches — don't fail whole sync
+            }
+        }
+
+        // Cleanup: remove local patches that are no longer on server
+        for folder in ["FF Normal", "FF Max"] {
+            let folderURL = root.appendingPathComponent(folder, isDirectory: true)
+            guard let files = try? fileManager.contentsOfDirectory(
+                at: folderURL,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+
+            for file in files where file.pathExtension.lowercased() == "3105" {
+                if !syncedFilenames.contains(file.lastPathComponent) {
+                    try? fileManager.removeItem(at: file)
+                    log("patch-sync: removed orphan \(file.lastPathComponent)")
                 }
             }
         }
 
-        return (installed, replaced, removed)
+        log("patch-sync: complete — \(syncedFilenames.count) patches synced")
     }
 
-    private static func findExistingPackageURL(
-        packageID: UUID,
-        targetFolder: String,
-        root: URL,
-        fileManager: FileManager
-    ) -> URL? {
-        let targetRoot = root.appendingPathComponent(targetFolder, isDirectory: true)
-        guard let files = try? fileManager.contentsOfDirectory(
-            at: targetRoot,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
-        ) else { return nil }
-
-        for fileURL in files where fileURL.pathExtension.lowercased() == "3105" {
-            guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
-                  let summary = try? PatchPackageCodec.inspect(data) else { continue }
-            if summary.packageID == packageID {
-                return fileURL
-            }
-        }
-        return nil
+    private static func sha256Hex(_ data: Data) -> String {
+        let hash = SHA256.hash(data: data)
+        return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - Load Patches
