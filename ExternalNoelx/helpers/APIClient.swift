@@ -33,6 +33,26 @@ struct LicenseDeviceInfo: Codable {
     let osVersion: String
 }
 
+// MARK: - Patch Models
+
+struct ServerPatchMetadata: Decodable, Identifiable {
+    let id: Int
+    let name: String
+    let displayName: String
+    let target: String
+    let category: String
+    let filename: String
+    let size: Int
+    let checksum: String
+    let updatedAt: Date?
+}
+
+struct PatchListResponse: Decodable {
+    let success: Bool
+    let patches: [ServerPatchMetadata]?
+    let error: String?
+}
+
 // MARK: - Errors
 
 enum APIClientError: Error, LocalizedError {
@@ -60,7 +80,6 @@ enum APIClientError: Error, LocalizedError {
 actor APIClient {
     static let shared = APIClient()
 
-    // ⚠️ CHANGE THIS TO YOUR VPS DOMAIN
     private let baseURL = URL(string: "https://api.proxynixx.my.id/")!
 
     private let session: URLSession
@@ -84,9 +103,8 @@ actor APIClient {
         self.encoder = encoder
     }
 
-    // MARK: - Public Endpoints
+    // MARK: - License Endpoints
 
-    /// Activate new key + bind to device.
     func activate(
         key: String,
         device: LicenseDeviceInfo
@@ -101,7 +119,6 @@ actor APIClient {
         return try await post(path: "/api/v1/activate", body: body)
     }
 
-    /// Verify a stored session token.
     func verify(
         token: String,
         deviceID: String
@@ -113,7 +130,6 @@ actor APIClient {
         return try await post(path: "/api/v1/verify", body: body)
     }
 
-    /// Unbind device from key (logout / switch device).
     func deactivate(
         token: String,
         deviceID: String
@@ -125,8 +141,6 @@ actor APIClient {
         return try await post(path: "/api/v1/deactivate", body: body)
     }
 
-    /// Check server status — maintenance or not.
-    /// This endpoint is safe to call when maintenance is active (returns 200).
     func status() async throws -> ServerStatusResponse {
         var request = URLRequest(url: baseURL.appendingPathComponent("/api/v1/status"))
         request.httpMethod = "GET"
@@ -148,6 +162,68 @@ actor APIClient {
         }
     }
 
+    // MARK: - Server-side Patches
+
+    func fetchPatchList(
+        deviceID: String,
+        license: String,
+        target: String? = nil
+    ) async throws -> [ServerPatchMetadata] {
+        var components = URLComponents(url: baseURL.appendingPathComponent("/api/v1/patches/list"), resolvingAgainstBaseURL: false)!
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "device_id", value: deviceID),
+            URLQueryItem(name: "license", value: license)
+        ]
+        if let target {
+            queryItems.append(URLQueryItem(name: "target", value: target))
+        }
+        components.queryItems = queryItems
+
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "GET"
+        request.setValue("NixxTime-iOS/1.0", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIClientError.networkUnreachable
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIClientError.serverError(http.statusCode)
+        }
+
+        let decoded = try decoder.decode(PatchListResponse.self, from: data)
+        guard decoded.success else {
+            throw APIClientError.serverError(0)
+        }
+        return decoded.patches ?? []
+    }
+
+    func downloadPatch(
+        id: Int,
+        deviceID: String,
+        license: String
+    ) async throws -> Data {
+        var components = URLComponents(url: baseURL.appendingPathComponent("/api/v1/patches/download/\(id)"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "device_id", value: deviceID),
+            URLQueryItem(name: "license", value: license)
+        ]
+
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "GET"
+        request.setValue("NixxTime-iOS/1.0", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 120
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIClientError.networkUnreachable
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIClientError.serverError(http.statusCode)
+        }
+        return data
+    }
+
     // MARK: - Private
 
     private func post<T: Decodable>(
@@ -166,7 +242,6 @@ actor APIClient {
             throw APIClientError.networkUnreachable
         }
 
-        // Handle 503 maintenance specifically
         if httpResponse.statusCode == 503 {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let errorMsg = json["error"] as? String {
