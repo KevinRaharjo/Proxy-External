@@ -2,10 +2,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.appLanguage) private var language
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var licenseManager: LicenseManager
-    @AppStorage(AppLanguage.storageKey) private var languageCode = AppLanguage.english.rawValue
     @AppStorage("selected_target") private var selectedTarget = "freefireth"
     @AppStorage(AccentStore.storageKey) private var accentRaw = AccentPreset.cyan.rawValue
 
@@ -28,12 +26,10 @@ struct SettingsView: View {
                 BP.bg.ignoresSafeArea()
                 ScrollView {
                     VStack(spacing: 10) {
-                        deviceSection
+                        deviceSection          // includes Support + License
                         targetSection
-                        languageSection
                         accentSection
                         versionSection
-                        licenseSection
                         guestSection
                         dangerSection
                     }
@@ -82,15 +78,60 @@ struct SettingsView: View {
         .preferredColorScheme(.dark)
     }
 
-    // MARK: - 01 DEVICE
+    // MARK: - 01 DEVICE (device info + support + license)
 
     private var deviceSection: some View {
         BPSection(index: 1, title: "Device", accentColor: accent) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 deviceRow("Hardware", AppInfo.displayMachineName)
                 deviceRow("iOS", "\(AppInfo.osVersion) (\(AppInfo.osBuild))")
                 deviceRow("Device ID", String(licenseManager.deviceID.prefix(16)) + "...")
                 deviceRow("Target", selectedTarget == "freefiremax" ? "FF Max" : "FF Normal")
+
+                Rectangle().fill(BP.line).frame(height: 0.5).padding(.vertical, 4)
+
+                // Support
+                HStack(spacing: 8) {
+                    Image(systemName: appState.isSupported ? "checkmark.shield.fill" : "xmark.shield.fill")
+                        .foregroundStyle(appState.isSupported ? BP.success : BP.danger)
+                        .font(.system(size: 14))
+                    Text("SUPPORT")
+                        .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                        .tracking(1.0)
+                        .foregroundStyle(BP.textFaint)
+                    Spacer()
+                    Text(appState.isSupported ? "SUPPORTED" : "UNSUPPORTED")
+                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                        .foregroundStyle(appState.isSupported ? BP.success : BP.danger)
+                }
+
+                // License
+                HStack(spacing: 8) {
+                    Image(systemName: licenseManager.isActive ? "checkmark.seal.fill" : "xmark.seal.fill")
+                        .foregroundStyle(licenseManager.isActive ? BP.success : BP.danger)
+                        .font(.system(size: 14))
+                    Text("LICENSE")
+                        .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                        .tracking(1.0)
+                        .foregroundStyle(BP.textFaint)
+                    Spacer()
+                    if let expiry = licenseManager.expirationDate {
+                        Text(expiry, style: .date)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(BP.textFaint)
+                    }
+                    Text(licenseManager.isActive ? "ACTIVE" : "INACTIVE")
+                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                        .foregroundStyle(licenseManager.isActive ? BP.success : BP.danger)
+                }
+
+                Button {
+                    showDeactivateAlert = true
+                } label: {
+                    Text("DEACTIVATE LICENSE")
+                }
+                .buttonStyle(BPButtonStyle(color: BP.warning))
+                .padding(.top, 4)
             }
         }
     }
@@ -137,41 +178,10 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - 03 LANGUAGE
-
-    private var languageSection: some View {
-        BPSection(index: 3, title: "Language", accentColor: accent) {
-            HStack(spacing: 6) {
-                ForEach(AppLanguage.allCases) { lang in
-                    Button {
-                        languageCode = lang.rawValue
-                    } label: {
-                        Text(shortLang(lang))
-                            .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                            .tracking(1.0)
-                            .foregroundStyle(languageCode == lang.rawValue ? BP.bg : BP.textDim)
-                            .frame(maxWidth: .infinity, minHeight: 36)
-                            .background(languageCode == lang.rawValue ? accent : BP.panelHi)
-                            .overlay(Rectangle().stroke(languageCode == lang.rawValue ? accent : BP.lineBright, lineWidth: 0.8))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    private func shortLang(_ lang: AppLanguage) -> String {
-        switch lang {
-        case .english: return "EN"
-        case .vietnamese: return "VI"
-        case .simplifiedChinese: return "中文"
-        }
-    }
-
-    // MARK: - 04 ACCENT COLOR
+    // MARK: - 03 ACCENT COLOR
 
     private var accentSection: some View {
-        BPSection(index: 4, title: "Accent Color", accentColor: accent) {
+        BPSection(index: 3, title: "Accent Color", accentColor: accent) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 70), spacing: 8)], spacing: 8) {
                 ForEach(AccentPreset.allCases) { preset in
                     Button {
@@ -203,10 +213,10 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - 05 VERSION SUPPORT (version-aware)
+    // MARK: - 04 VERSION SUPPORT
 
     private var versionSection: some View {
-        BPSection(index: 5, title: "Version Support", accentColor: accent) {
+        BPSection(index: 4, title: "Version Support", accentColor: accent) {
             VStack(spacing: 0) {
                 let current = currentIOSMajor()
                 versionRow(
@@ -296,39 +306,10 @@ struct SettingsView: View {
         [17, 18, 26].filter { $0 != current }
     }
 
-    // MARK: - 06 LICENSE
-
-    private var licenseSection: some View {
-        BPSection(index: 6, title: "License", accentColor: accent) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Image(systemName: licenseManager.isActive ? "checkmark.seal.fill" : "xmark.seal.fill")
-                        .foregroundStyle(licenseManager.isActive ? BP.success : BP.danger)
-                    Text(licenseManager.isActive ? "ACTIVE" : "INACTIVE")
-                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                        .tracking(1.2)
-                        .foregroundStyle(licenseManager.isActive ? BP.success : BP.danger)
-                    Spacer()
-                    if let expiry = licenseManager.expirationDate {
-                        Text(expiry, style: .date)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(BP.textFaint)
-                    }
-                }
-                Button {
-                    showDeactivateAlert = true
-                } label: {
-                    Text("DEACTIVATE")
-                }
-                .buttonStyle(BPButtonStyle(color: BP.warning))
-            }
-        }
-    }
-
-    // MARK: - 07 GUEST RESET
+    // MARK: - 05 GUEST RESET
 
     private var guestSection: some View {
-        BPSection(index: 7, title: "Guest Reset", accentColor: accent) {
+        BPSection(index: 5, title: "Guest Reset", accentColor: accent) {
             let ff = FFGuestReset.isFFInstalled()
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
@@ -356,10 +337,10 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - 08 DANGER ZONE
+    // MARK: - 06 DANGER ZONE
 
     private var dangerSection: some View {
-        BPSection(index: 8, title: "Danger Zone", accentColor: BP.danger) {
+        BPSection(index: 6, title: "Danger Zone", accentColor: BP.danger) {
             VStack(spacing: 8) {
                 Button { showResetAlert = true } label: {
                     Text("RESET ALL PATCHES")
@@ -374,7 +355,7 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Actions (fungsi lama tetap)
+    // MARK: - Actions
 
     private func performResetPatches() {
         do {
