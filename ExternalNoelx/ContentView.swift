@@ -28,6 +28,13 @@ struct ContentView: View {
         patchStore.items.filter { $0.category == selectedCategory }
     }
 
+    /// Kategori yang punya minimal 1 patch
+    private var availableCategories: [PatchCategory] {
+        PatchCategory.allCases.filter { category in
+            patchStore.items.contains(where: { $0.category == category })
+        }
+    }
+
     var body: some View {
         ZStack {
             AnimatedHyperBackdrop()
@@ -63,18 +70,24 @@ struct ContentView: View {
             patchStore.setTarget(targetFolder)
             patchMessage = "READY — SELECT A PATCH"
             refreshPatchFlags(target: targetFolder)
+            ensureValidCategory()
         }
         .onChange(of: selectedTarget) { newTarget in
             let folder = newTarget == "freefiremax" ? "FF Max" : "FF Normal"
             patchStore.setTarget(folder)
             patchMessage = "READY — SELECT A PATCH"
             refreshPatchFlags(target: folder)
+            ensureValidCategory()
         }
         .onChange(of: scenePhase) { phase in
             guard phase == .active, !patchOperationBusy else { return }
             patchStore.reload()
             patchMessage = "READY — SELECT A PATCH"
             refreshPatchFlags(target: targetFolder)
+            ensureValidCategory()
+        }
+        .onChange(of: patchStore.items) { _ in
+            ensureValidCategory()
         }
         .alert(isPresented: $showAlert) {
             Alert(
@@ -82,6 +95,17 @@ struct ContentView: View {
                 message: Text(alertMessage),
                 dismissButton: .default(Text("OK"))
             )
+        }
+    }
+
+    /// Kalo selectedCategory kosong, pindah ke kategori pertama yang ada isinya
+    private func ensureValidCategory() {
+        let available = availableCategories
+        guard !available.isEmpty else { return }
+        if !available.contains(selectedCategory) {
+            withAnimation(.easeInOut(duration: 0.22)) {
+                selectedCategory = available[0]
+            }
         }
     }
 
@@ -177,15 +201,54 @@ struct ContentView: View {
         .padding(.vertical, 4)
     }
 
-    // MARK: - Category selector
+    // MARK: - Category selector (dynamic — cuma nampilin kategori yang ada isinya)
 
+    @ViewBuilder
     private var categorySelector: some View {
-        HStack(spacing: 0) {
-            ForEach(PatchCategory.allCases) { category in
-                categoryPill(category)
+        let available = availableCategories
+
+        if available.isEmpty {
+            // gak ada kategori yang ada isinya → selector gak muncul
+            EmptyView()
+        } else if available.count == 1 {
+            // cuma 1 kategori → tampilin sebagai label
+            singleCategoryLabel(available[0])
+        } else {
+            // 2+ kategori → tampilin selector normal
+            HStack(spacing: 0) {
+                ForEach(available) { category in
+                    categoryPill(category)
+                }
             }
+            .padding(4)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(AppTheme.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(AppTheme.borderSubtle, lineWidth: 0.8)
+                    )
+            )
         }
-        .padding(4)
+    }
+
+    private func singleCategoryLabel(_ category: PatchCategory) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: category.icon)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(category.tint)
+            Text(category.displayName)
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .tracking(1.2)
+                .foregroundStyle(AppTheme.silver)
+            Spacer()
+            Text("\(filteredPatches.count) AVAILABLE")
+                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                .tracking(1.0)
+                .foregroundStyle(AppTheme.silverMuted)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(AppTheme.surface)
@@ -257,7 +320,11 @@ struct ContentView: View {
     private var patchOptions: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                panelTitle("\(selectedCategory.displayName) PATCHES", icon: selectedCategory.icon)
+                if availableCategories.isEmpty {
+                    panelTitle("PATCHES", icon: "shippingbox")
+                } else {
+                    panelTitle("\(selectedCategory.displayName) PATCHES", icon: selectedCategory.icon)
+                }
                 Spacer()
                 Text("\(filteredPatches.count) AVAILABLE")
                     .font(.system(size: 10, weight: .heavy, design: .rounded))
@@ -298,10 +365,10 @@ struct ContentView: View {
             Image(systemName: "folder.badge.questionmark")
                 .font(.system(size: 38, weight: .light))
                 .foregroundStyle(AppTheme.silverMuted)
-            Text("No \(selectedCategory.displayName) patches found")
+            Text("No patches found")
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundStyle(AppTheme.silver)
-            Text("Add \(selectedCategory.displayName)-*.3105 files to Patches/\(targetFolder)/")
+            Text("Add AIM-*.3105, ESP-*.3105, or MISC-*.3105\nfiles to Patches/\(targetFolder)/")
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(AppTheme.silverMuted)
                 .multilineTextAlignment(.center)
