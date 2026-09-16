@@ -81,7 +81,6 @@
 		3105T001 /* FFGuestReset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105T002 /* FFGuestReset.swift */; };
 		3105U200 /* AnnouncementModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105U201 /* AnnouncementModels.swift */; };
 		3105U202 /* AnnouncementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105U203 /* AnnouncementService.swift */; };
-		3105U204 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105U205 /* RootTabView.swift */; };
 		3105U206 /* InfoTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105U207 /* InfoTabView.swift */; };
 /* End PBXBuildFile section */
 
@@ -179,7 +178,6 @@
 		3105T002 /* FFGuestReset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FFGuestReset.swift; sourceTree = "<group>"; };
 		3105U201 /* AnnouncementModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementModels.swift; sourceTree = "<group>"; };
 		3105U203 /* AnnouncementService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementService.swift; sourceTree = "<group>"; };
-		3105U205 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		3105U207 /* InfoTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoTabView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -209,7 +207,6 @@
 				3105A060 /* Info.plist */,
 				3105A020 /* App.swift */,
 				3105A021 /* ContentView.swift */,
-				3105U205 /* RootTabView.swift */,
 				3105U207 /* InfoTabView.swift */,
 				3105A403 /* exploit */,
 				3105A404 /* views */,
@@ -479,7 +476,6 @@
 				3105T001,
 				3105U200,
 				3105U202,
-				3105U204,
 				3105U206,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -524,7 +520,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.1;
 				OTHER_LDFLAGS = "-lz";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.mobile.MobileHouseArrest";
 				PRODUCT_NAME = NixxTime;
@@ -558,7 +554,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.1;
 				OTHER_LDFLAGS = "-lz";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.mobile.MobileHouseArrest";
 				PRODUCT_NAME = NixxTime;
