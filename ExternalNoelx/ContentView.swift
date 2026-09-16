@@ -35,7 +35,6 @@ struct ContentView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 18) {
                     brandHeader
-                    devicePanel
                     categorySelector
                     patchOptions
                     gameLaunchPanel
@@ -178,7 +177,7 @@ struct ContentView: View {
         .padding(.vertical, 4)
     }
 
-    // MARK: - Category selector (animated)
+    // MARK: - Category selector
 
     private var categorySelector: some View {
         HStack(spacing: 0) {
@@ -206,7 +205,6 @@ struct ContentView: View {
             withAnimation(.spring(response: 0.34, dampingFraction: 0.78)) {
                 selectedCategory = category
             }
-            // Light haptic tick on category switch.
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
             HStack(spacing: 6) {
@@ -223,11 +221,9 @@ struct ContentView: View {
             .padding(.vertical, 10)
             .background(
                 ZStack {
-                    // Inactive base — invisible, kept for stable hit area.
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color.clear)
 
-                    // Active pill — animates in via matchedGeometryEffect.
                     if isSelected {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .fill(
@@ -255,30 +251,6 @@ struct ContentView: View {
     }
 
     @Namespace private var categoryNamespace
-
-    // MARK: - Device panel
-
-    private var devicePanel: some View {
-        AppSurfaceCard(corner: AppTheme.cardCorner, glowColor: AppTheme.accent, glowActive: false) {
-            VStack(spacing: 0) {
-                panelTitle("DEVICE STATUS", icon: "shield.lefthalf.filled")
-                statusRow(icon: "apple.logo", title: "iOS", value: AppInfo.osVersion, color: AppTheme.accentBright)
-                statusRow(icon: "iphone", title: "Device", value: AppInfo.displayMachineName, color: AppTheme.silver)
-                statusRow(
-                    icon: licenseManager.isActive ? "checkmark.seal.fill" : "xmark.seal.fill",
-                    title: "License",
-                    value: licenseManager.isActive ? "ACTIVE" : "INACTIVE",
-                    color: licenseManager.isActive ? AppTheme.success : AppTheme.danger
-                )
-                statusRow(
-                    icon: appState.isSupported ? "checkmark.shield.fill" : "xmark.shield.fill",
-                    title: "Support",
-                    value: appState.isSupported ? "SUPPORTED" : "UNSUPPORTED",
-                    color: appState.isSupported ? AppTheme.success : AppTheme.danger
-                )
-            }
-        }
-    }
 
     // MARK: - Patch options
 
@@ -529,23 +501,6 @@ struct ContentView: View {
             .foregroundStyle(AppTheme.accentBright)
     }
 
-    private func statusRow(icon: String, title: String, value: String, color: Color) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(color)
-                .frame(width: 24)
-            Text(title)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundStyle(AppTheme.silverDim)
-            Spacer()
-            Text(value)
-                .font(.system(size: 14, weight: .heavy, design: .rounded))
-                .foregroundStyle(AppTheme.silver)
-        }
-        .padding(.top, 14)
-    }
-
     // MARK: - Actions
 
     private enum PatchActionResult {
@@ -634,7 +589,7 @@ struct ContentView: View {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// MARK: - Patch Tile (with NotchSliderToggle + Flag Badge)
+// MARK: - Patch Tile
 // ═══════════════════════════════════════════════════════════════════════
 
 private struct PatchTile: View {
