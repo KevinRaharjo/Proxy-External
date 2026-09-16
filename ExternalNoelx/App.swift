@@ -17,6 +17,15 @@ struct ExternalNoelxApp: App {
     init() {
         setupLogCapture()
         log("app: External Nixx launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machineName)")
+
+        // Ensure patches directory exists (Application Support) + migrate bundled patches (one-time)
+        do {
+            _ = try PatchProjectLibrary.ensurePatchesDirectory()
+            log("app: patches directory ready")
+        } catch {
+            log("app: failed to ensure patches directory: \(error.localizedDescription)")
+        }
+        PatchProjectLibrary.installBundledPackagesIfNeeded()
     }
 
     private func checkForUpdate() {
