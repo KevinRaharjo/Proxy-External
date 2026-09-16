@@ -46,11 +46,34 @@ final class PatchProjectStore: ObservableObject {
     func reload() {
         items = PatchProjectLibrary.load(target: currentTarget)
     }
-    
+
     func setTarget(_ target: String) {
         currentTarget = target
         reload()
     }
+
+    // MARK: - Server-side sync
+
+    /// Sync patches from server (requires device + license)
+    func syncFromServer(deviceID: String, license: String) async {
+        guard !isBusy else { return }
+        isBusy = true
+        defer { isBusy = false }
+
+        do {
+            try await PatchProjectLibrary.syncPatchesFromServer(
+                deviceID: deviceID,
+                license: license
+            )
+            reload()
+            log("patch-store: sync from server complete — \(items.count) patches")
+        } catch {
+            log("patch-store: sync from server failed: \(error.localizedDescription)")
+            // Don't show alert — sync failure is non-fatal
+        }
+    }
+
+    // MARK: - Create
 
     func create(project: PatchProject, password: String?) {
         runOperation(successMessageKey: "patch.created_message") {
