@@ -312,7 +312,7 @@
 				3105A025 /* Utils.swift */,
 				3105A026 /* SBX.swift */,
 				3105A027 /* MG.swift */,
-			);
+				);
 			path = helpers;
 			sourceTree = "<group>";
 		};
