@@ -8,6 +8,7 @@ struct ContentView: View {
     @EnvironmentObject private var licenseManager: LicenseManager
     @State private var showSettings = false
     @State private var showCleaner = false
+    @State private var showInfo = false
     @StateObject private var patchStore = PatchProjectStore()
     @State private var patchOperationBusy = false
     @State private var patchMessage = "READY — SELECT A PATCH"
@@ -52,6 +53,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showCleaner) {
             CleanerView()
+        }
+        .sheet(isPresented: $showInfo) {
+            InfoTabView()
         }
         .sheet(item: $patchStore.passwordRequest, onDismiss: patchStore.cancelUnlock) { _ in
             PatchUnlockPrompt(store: patchStore)
@@ -134,23 +138,42 @@ struct ContentView: View {
 
             Spacer()
 
-            Button {
-                showSettings = true
-            } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(AppTheme.silver)
-                    .frame(width: 46, height: 46)
-                    .background(
-                        Circle().fill(AppTheme.surfaceElevated)
-                    )
-                    .overlay(
-                        Circle().stroke(AppTheme.borderHighlight, lineWidth: 0.8)
-                    )
-                    .shadow(color: AppTheme.accentGlow, radius: 8)
+            HStack(spacing: 8) {
+                Button {
+                    showInfo = true
+                } label: {
+                    Image(systemName: "megaphone.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AppTheme.accentBright)
+                        .frame(width: 46, height: 46)
+                        .background(
+                            Circle().fill(AppTheme.surfaceElevated)
+                        )
+                        .overlay(
+                            Circle().stroke(AppTheme.borderHighlight, lineWidth: 0.8)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Announcements")
+
+                Button {
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(AppTheme.silver)
+                        .frame(width: 46, height: 46)
+                        .background(
+                            Circle().fill(AppTheme.surfaceElevated)
+                        )
+                        .overlay(
+                            Circle().stroke(AppTheme.borderHighlight, lineWidth: 0.8)
+                        )
+                        .shadow(color: AppTheme.accentGlow, radius: 8)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open settings")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open settings")
         }
         .padding(.vertical, 4)
     }
