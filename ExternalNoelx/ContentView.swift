@@ -72,10 +72,12 @@ struct ContentView: View {
             refreshPatchFlags(target: targetFolder)
             ensureValidCategory()
             syncPatchesFromServer()
+            fetchSupportedVersions()
         }
         .onChange(of: licenseManager.state) { state in
             if case .active = state {
                 syncPatchesFromServer()
+                fetchSupportedVersions()
             }
         }
         .onChange(of: selectedTarget) { newTarget in
@@ -105,7 +107,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Server-side patch sync
+    // MARK: - Server-side sync
 
     private func syncPatchesFromServer() {
         guard licenseManager.isActive else {
@@ -116,7 +118,6 @@ struct ContentView: View {
             log("patch-sync: no remembered key, skipping")
             return
         }
-        // Don't re-sync same license on every appear
         guard licenseKey != lastSyncedLicense else {
             log("patch-sync: already synced for this license")
             return
@@ -130,6 +131,20 @@ struct ContentView: View {
             await patchStore.syncFromServer(deviceID: deviceID, license: licenseKey)
             patchMessage = "READY — SELECT A PATCH"
             ensureValidCategory()
+        }
+    }
+
+    private func fetchSupportedVersions() {
+        Task {
+            do {
+                let versions = try await SupportedVersionsService.shared.fetch(force: false)
+                log("supported-versions: fetched \(versions.count) entries")
+                for v in versions {
+                    log("supported-versions: \(v.range) → \(v.status)")
+                }
+            } catch {
+                log("supported-versions: fetch failed — using fallback (\(error.localizedDescription))")
+            }
         }
     }
 
