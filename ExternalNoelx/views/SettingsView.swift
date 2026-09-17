@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var licenseManager: LicenseManager
+    @EnvironmentObject private var remoteConfig: RemoteConfigService
     @AppStorage("selected_target") private var selectedTarget = "freefireth"
     @AppStorage(AccentStore.storageKey) private var accentRaw = AccentPreset.cyan.rawValue
 
@@ -18,6 +19,15 @@ struct SettingsView: View {
 
     private var accent: Color {
         (AccentPreset(rawValue: accentRaw) ?? .cyan).color
+    }
+
+    // ═══ REMOTE CONFIG: dynamic support links ═══
+    private var supportWhatsApp: String {
+        remoteConfig.supportWhatsApp ?? licenseManager.supportWhatsApp
+    }
+
+    private var supportTelegram: String {
+        remoteConfig.supportTelegram ?? licenseManager.supportTelegram
     }
 
     var body: some View {
