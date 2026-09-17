@@ -7,18 +7,17 @@ struct ExternalNoelxApp: App {
     @StateObject private var licenseManager = LicenseManager()
     @StateObject private var patchDraftCoordinator = PatchDraftCoordinator()
     @StateObject private var fileOperationCoordinator = FileOperationCoordinator()
+    @StateObject private var remoteConfig = RemoteConfigService.shared
     @AppStorage("selected_target") private var selectedTarget = ""
     @State private var updateOffer: AppUpdateChecker.Offer?
     @Environment(\.scenePhase) private var scenePhase
 
-    // Force English — no language picker anymore
     private let language: AppLanguage = .english
 
     init() {
         setupLogCapture()
         log("app: External Nixx launching — iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) \(AppInfo.machineName)")
 
-        // Ensure patches directory exists + migrate bundled patches (one-time)
         do {
             _ = try PatchProjectLibrary.ensurePatchesDirectory()
             log("app: patches directory ready")
@@ -38,42 +37,51 @@ struct ExternalNoelxApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                switch licenseManager.state {
-                case .checking:
-                    ZStack {
-                        AnimatedHyperBackdrop()
-                            .ignoresSafeArea()
-                        VStack(spacing: 20) {
-                            ProgressView()
-                                .tint(.white)
-                                .scaleEffect(1.3)
-                            Text("Verifying license…")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.7))
+                // ═══ FORCE UPDATE (highest priority) ═══
+                if remoteConfig.isForceUpdateRequired {
+                    ForceUpdateView(
+                        message: "A new version is required. Please update to continue.",
+                        updateURL: remoteConfig.forceUpdateUrl
+                    )
+                } else {
+                    switch licenseManager.state {
+                    case .checking:
+                        ZStack {
+                            AnimatedHyperBackdrop()
+                                .ignoresSafeArea()
+                            VStack(spacing: 20) {
+                                ProgressView()
+                                    .tint(.white)
+                                    .scaleEffect(1.3)
+                                Text("Verifying license…")
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
                         }
+
+                    case .maintenance:
+                        MaintenanceView(manager: licenseManager)
+
+                    case .inactive:
+                        LicenseActivationView(manager: licenseManager)
+
+                    case .active:
+                        if selectedTarget.isEmpty {
+                            TargetSelectionView(selectedTarget: $selectedTarget)
+                        } else {
+                            ContentView()
+                                .environmentObject(licenseManager)
+                        }
+
+                    case .offline:
+                        LicenseActivationView(manager: licenseManager)
                     }
-
-                case .maintenance:
-                    MaintenanceView(manager: licenseManager)
-
-                case .inactive:
-                    LicenseActivationView(manager: licenseManager)
-
-                case .active:
-                    if selectedTarget.isEmpty {
-                        TargetSelectionView(selectedTarget: $selectedTarget)
-                    } else {
-                        ContentView()
-                            .environmentObject(licenseManager)
-                    }
-
-                case .offline:
-                    LicenseActivationView(manager: licenseManager)
                 }
             }
             .environmentObject(appState)
             .environmentObject(patchDraftCoordinator)
             .environmentObject(fileOperationCoordinator)
+            .environmentObject(remoteConfig)
             .environment(\.appLanguage, language)
             .environment(\.locale, language.locale)
             .alert(item: $updateOffer) { offer in
@@ -93,17 +101,24 @@ struct ExternalNoelxApp: App {
                 appState.detectSupport()
                 checkForUpdate()
             }
+            .task {
+                // Fetch remote config saat app launch
+                await remoteConfig.fetch()
+                log("remote-config: min=\(remoteConfig.minAppVersion), forceUpdate=\(remoteConfig.isForceUpdateRequired)")
+            }
             .onChange(of: scenePhase) { phase in
                 guard phase == .active else { return }
 
-                // Only re-verify if:
-                // 1. License is not active yet (new user / logged out), OR
-                // 2. More than 1 hour since last verify
                 if licenseManager.shouldReverifyOnForeground() {
                     licenseManager.beginLaunchSession()
                 }
 
                 appState.detectSupport()
+
+                // Refresh remote config saat foreground
+                Task {
+                    await remoteConfig.fetch()
+                }
             }
             .onOpenURL { url in
                 patchDraftCoordinator.presentImport(url)
