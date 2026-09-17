@@ -2,11 +2,21 @@ import SwiftUI
 
 struct MaintenanceView: View {
     @ObservedObject var manager: LicenseManager
+    @EnvironmentObject private var remoteConfig: RemoteConfigService
     @State private var isRetrying = false
     @State private var lastCheckedAt = Date()
     @State private var autoRetryCountdown = 30
     @State private var autoRetryTimer: Timer?
     @State private var pulsePhase = false
+
+    // ═══ REMOTE CONFIG: dynamic support links ═══
+    private var supportWhatsApp: String {
+        remoteConfig.supportWhatsApp ?? manager.supportWhatsApp
+    }
+
+    private var supportTelegram: String {
+        remoteConfig.supportTelegram ?? manager.supportTelegram
+    }
 
     var body: some View {
         NavigationStack {
@@ -141,13 +151,13 @@ struct MaintenanceView: View {
                                     title: "WhatsApp",
                                     icon: "message.fill",
                                     tint: AppTheme.success,
-                                    url: manager.supportWhatsApp
+                                    url: supportWhatsApp
                                 )
                                 contactButton(
                                     title: "Telegram",
                                     icon: "paperplane.fill",
                                     tint: AppTheme.accentBright,
-                                    url: manager.supportTelegram
+                                    url: supportTelegram
                                 )
                             }
                             .padding(.horizontal, 22)
