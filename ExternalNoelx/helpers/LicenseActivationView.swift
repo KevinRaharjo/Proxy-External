@@ -2,10 +2,20 @@ import SwiftUI
 
 struct LicenseActivationView: View {
     @ObservedObject var manager: LicenseManager
+    @EnvironmentObject private var remoteConfig: RemoteConfigService
     @State private var key = ""
     @FocusState private var keyFocused: Bool
     @State private var glowPulse = false
     @State private var borderPhase = false
+
+    // ═══ REMOTE CONFIG: dynamic support links ═══
+    private var supportWhatsApp: String {
+        remoteConfig.supportWhatsApp ?? manager.supportWhatsApp
+    }
+
+    private var supportTelegram: String {
+        remoteConfig.supportTelegram ?? manager.supportTelegram
+    }
 
     var body: some View {
         ZStack {
@@ -216,13 +226,13 @@ struct LicenseActivationView: View {
                     title: "WHATSAPP",
                     icon: "message.fill",
                     color: Color(red: 0.15, green: 0.83, blue: 0.38),
-                    url: manager.supportWhatsApp
+                    url: supportWhatsApp
                 )
                 contactChip(
                     title: "TELEGRAM",
                     icon: "paperplane.fill",
                     color: Color(red: 0.16, green: 0.63, blue: 0.87),
-                    url: manager.supportTelegram
+                    url: supportTelegram
                 )
             }
         }
