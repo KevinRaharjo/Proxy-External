@@ -77,7 +77,7 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) { }
                 Button("Reset", role: .destructive) { performGuestReset() }
             } message: {
-                Text("This will delete FF guest account data so FF creates a fresh guest.\n\nMake sure FF is CLOSED first.")
+                Text("This will write a reset flag to FF's LocalConfig.json.\n\nFF will create a fresh guest account next time you open it.\n\n⚠️ Make sure FF is CLOSED first.")
             }
             .alert("Result", isPresented: $showResultAlert) {
                 Button("OK") { resetMessage = "" }
@@ -305,6 +305,7 @@ struct SettingsView: View {
 
     private func rangeFor(major: Int) -> String {
         switch major {
+        case 16: return ExploitSupportPolicy.verifiedIOS16Range
         case 17: return ExploitSupportPolicy.verifiedIOS17Range
         case 18: return ExploitSupportPolicy.verifiedIOS18Range
         case 26: return ExploitSupportPolicy.verifiedIOS26Range
@@ -313,7 +314,7 @@ struct SettingsView: View {
     }
 
     private func otherVersions(current: Int) -> [Int] {
-        [17, 18, 26].filter { $0 != current }
+        [16, 17, 18, 26].filter { $0 != current }
     }
 
     // MARK: - 05 GUEST RESET
@@ -333,6 +334,26 @@ struct SettingsView: View {
                     if ff.normal { BPBadge(text: "NORMAL", color: accent) }
                     if ff.max { BPBadge(text: "MAX", color: BP.warning) }
                 }
+
+                // Info box
+                if ff.normal || ff.max {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(BP.info)
+                        Text("Writes reset flag to LocalConfig.json.\nFF will create fresh guest on next launch.")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(BP.textDim)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(BP.info.opacity(0.08))
+                    .overlay(
+                        Rectangle().stroke(BP.info.opacity(0.3), lineWidth: 0.5)
+                    )
+                }
+
                 Button {
                     showGuestResetAlert = true
                 } label: {
@@ -406,22 +427,57 @@ struct SettingsView: View {
 
     private func performGuestReset() {
         isResettingGuest = true
+
+        // ⚠️ Pastiin FF closed dulu
+        let runningApps = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .compactMap { $0.rootViewController }
+
+        // Log running state (optional, kalau mau detect FF running)
+        log("SettingsView: performing guest reset...")
+
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let report = try FFGuestReset.resetAllGuests()
+
                 DispatchQueue.main.async {
                     isResettingGuest = false
+
                     if report.perBundle.isEmpty && report.errors.isEmpty {
-                        resetMessage = "No FF installed on this device."
+                        resetMessage = """
+                        No FF installed on this device.
+
+                        Install Free Fire first, then try again.
+                        """
                     } else {
-                        resetMessage = "✅ Reset Guest FF Success\n\n\(report.summary)\n\nNow open FF to create a new guest account."
+                        resetMessage = """
+                        ✅ Reset Guest FF Success
+
+                        \(report.summary)
+
+                        ⚠️ Next Steps:
+                        1. Close External Nixx
+                        2. Open Free Fire
+                        3. FF will create a new guest automatically
+                        4. Login with your FF account
+                        """
                     }
                     showResultAlert = true
                 }
             } catch {
                 DispatchQueue.main.async {
                     isResettingGuest = false
-                    resetMessage = "❌ Reset failed: \(error.localizedDescription)"
+                    resetMessage = """
+                    ❌ Reset Failed
+
+                    \(error.localizedDescription)
+
+                    Make sure:
+                    • FF is CLOSED
+                    • Kernel exploit is active
+                    • FF is installed
+                    """
                     showResultAlert = true
                 }
             }
