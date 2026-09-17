@@ -1,18 +1,96 @@
 import Foundation
 
+// ═══════════════════════════════════════════════
 // MARK: - Models
+// ═══════════════════════════════════════════════
 
 struct ActivateResponse: Decodable {
     let success: Bool
     let token: String?
     let expiresAt: Date?
     let error: String?
+    let firstActivation: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case success, token, expiresAt, error, firstActivation
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // ═══ Defensive decode — semua field optional ═══
+        success = (try? c.decode(Bool.self, forKey: .success)) ?? false
+        token = try? c.decode(String.self, forKey: .token)
+        error = try? c.decode(String.self, forKey: .error)
+        firstActivation = try? c.decode(Bool.self, forKey: .firstActivation)
+        expiresAt = Self.decodeFlexibleDate(from: c, key: .expiresAt)
+    }
+
+    private static func decodeFlexibleDate(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        key: CodingKeys
+    ) -> Date? {
+        guard let dateString = try? container.decode(String.self, forKey: key) else {
+            return nil
+        }
+
+        // ISO8601 dengan fractional seconds
+        let iso1 = ISO8601DateFormatter()
+        iso1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso1.date(from: dateString) { return date }
+
+        // ISO8601 tanpa fractional
+        let iso2 = ISO8601DateFormatter()
+        iso2.formatOptions = [.withInternetDateTime]
+        if let date = iso2.date(from: dateString) { return date }
+
+        // SQLite format
+        let sqlite = DateFormatter()
+        sqlite.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        sqlite.timeZone = TimeZone(identifier: "UTC")
+        if let date = sqlite.date(from: dateString) { return date }
+
+        // Fallback
+        let alt = DateFormatter()
+        alt.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        alt.timeZone = TimeZone(identifier: "UTC")
+        if let date = alt.date(from: dateString) { return date }
+
+        log("api: ⚠️ cannot decode date: \(dateString)")
+        return nil
+    }
 }
 
 struct VerifyResponse: Decodable {
     let success: Bool
     let expiresAt: Date?
     let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success, expiresAt, error
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        success = (try? c.decode(Bool.self, forKey: .success)) ?? false
+        error = try? c.decode(String.self, forKey: .error)
+        // Date decode manual
+        if let dateString = try? c.decode(String.self, forKey: .expiresAt) {
+            let iso1 = ISO8601DateFormatter()
+            iso1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let iso2 = ISO8601DateFormatter()
+            iso2.formatOptions = [.withInternetDateTime]
+            let sqlite = DateFormatter()
+            sqlite.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            sqlite.timeZone = TimeZone(identifier: "UTC")
+
+            if let d = iso1.date(from: dateString) { expiresAt = d }
+            else if let d = iso2.date(from: dateString) { expiresAt = d }
+            else if let d = sqlite.date(from: dateString) { expiresAt = d }
+            else { expiresAt = nil }
+        } else {
+            expiresAt = nil
+        }
+    }
 }
 
 struct DeactivateResponse: Decodable {
@@ -24,6 +102,17 @@ struct ServerStatusResponse: Decodable {
     let online: Bool
     let maintenance: Bool
     let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case online, maintenance, message
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        online = (try? c.decode(Bool.self, forKey: .online)) ?? true
+        maintenance = (try? c.decode(Bool.self, forKey: .maintenance)) ?? false
+        message = try? c.decode(String.self, forKey: .message)
+    }
 }
 
 struct LicenseDeviceInfo: Codable {
@@ -45,12 +134,47 @@ struct ServerPatchMetadata: Decodable, Identifiable {
     let size: Int
     let checksum: String
     let updatedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, displayName, target, category, filename, size, checksum, updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(Int.self, forKey: .id)) ?? 0
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        displayName = (try? c.decode(String.self, forKey: .displayName)) ?? name
+        target = (try? c.decode(String.self, forKey: .target)) ?? ""
+        category = (try? c.decode(String.self, forKey: .category)) ?? "AIM"
+        filename = (try? c.decode(String.self, forKey: .filename)) ?? ""
+        size = (try? c.decode(Int.self, forKey: .size)) ?? 0
+        checksum = (try? c.decode(String.self, forKey: .checksum)) ?? ""
+
+        if let dateStr = try? c.decode(String.self, forKey: .updatedAt) {
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            updatedAt = iso.date(from: dateStr)
+        } else {
+            updatedAt = nil
+        }
+    }
 }
 
 struct PatchListResponse: Decodable {
     let success: Bool
     let patches: [ServerPatchMetadata]?
     let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success, patches, error
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        success = (try? c.decode(Bool.self, forKey: .success)) ?? false
+        patches = try? c.decode([ServerPatchMetadata].self, forKey: .patches)
+        error = try? c.decode(String.self, forKey: .error)
+    }
 }
 
 // MARK: - Errors
@@ -75,7 +199,9 @@ enum APIClientError: Error, LocalizedError {
     }
 }
 
+// ═══════════════════════════════════════════════
 // MARK: - API Client
+// ═══════════════════════════════════════════════
 
 actor APIClient {
     static let shared = APIClient()
@@ -88,9 +214,10 @@ actor APIClient {
 
     private init() {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 15
-        config.timeoutIntervalForResource = 30
-        config.waitsForConnectivity = false
+        config.timeoutIntervalForRequest = 30          // ⬅️ 30s (Indonesia-friendly)
+        config.timeoutIntervalForResource = 60
+        config.waitsForConnectivity = true             // ⬅️ tunggu koneksi
+        config.allowsCellularAccess = true
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         self.session = URLSession(configuration: config)
 
@@ -103,7 +230,95 @@ actor APIClient {
         self.encoder = encoder
     }
 
+    // ═══════════════════════════════════════════════
+    // MARK: - Retry Helper (Indonesia-friendly)
+    // ═══════════════════════════════════════════════
+
+    private func performRequest<T: Decodable>(
+        _ request: URLRequest,
+        maxRetries: Int = 3
+    ) async throws -> T {
+        var lastError: Error?
+
+        for attempt in 1...maxRetries {
+            do {
+                log("api: → attempt \(attempt)/\(maxRetries) \(request.httpMethod ?? "GET") \(request.url?.path ?? "")")
+
+                let (data, response) = try await session.data(for: request)
+
+                guard let http = response as? HTTPURLResponse else {
+                    throw APIClientError.networkUnreachable
+                }
+
+                log("api: ← status=\(http.statusCode)")
+
+                if let raw = String(data: data, encoding: .utf8) {
+                    log("api: ← raw=\(raw.prefix(500))")
+                }
+
+                // Retry on 5xx
+                if http.statusCode >= 500 {
+                    lastError = APIClientError.serverError(http.statusCode)
+                    if attempt < maxRetries {
+                        let delay = UInt64(pow(2.0, Double(attempt)) * 1_000_000_000)
+                        try await Task.sleep(nanoseconds: delay)
+                        continue
+                    }
+                }
+
+                guard (200..<500).contains(http.statusCode) else {
+                    throw APIClientError.serverError(http.statusCode)
+                }
+
+                // Detect HTML response (server error page)
+                if let raw = String(data: data, encoding: .utf8),
+                   raw.trimmingCharacters(in: .whitespaces).hasPrefix("<") {
+                    log("api: ⚠️ server returned HTML instead of JSON")
+                    lastError = APIClientError.decodingFailed
+                    if attempt < maxRetries {
+                        let delay = UInt64(pow(2.0, Double(attempt)) * 1_000_000_000)
+                        try await Task.sleep(nanoseconds: delay)
+                        continue
+                    }
+                    throw APIClientError.decodingFailed
+                }
+
+                // Decode
+                do {
+                    let decoded = try decoder.decode(T.self, from: data)
+                    log("api: ✅ decoded OK")
+                    return decoded
+                } catch let decodingError as DecodingError {
+                    log("api: ❌ decode error — \(decodingError)")
+                    lastError = APIClientError.decodingFailed
+                    // Jangan retry kalau decode error (kecuali HTML, udah dihandle)
+                    throw APIClientError.decodingFailed
+                }
+            } catch let error as APIClientError {
+                lastError = error
+                if attempt < maxRetries, case .networkUnreachable = error {
+                    let delay = UInt64(pow(2.0, Double(attempt)) * 1_000_000_000)
+                    try? await Task.sleep(nanoseconds: delay)
+                    continue
+                }
+                throw error
+            } catch {
+                lastError = error
+                if attempt < maxRetries {
+                    let delay = UInt64(pow(2.0, Double(attempt)) * 1_000_000_000)
+                    try? await Task.sleep(nanoseconds: delay)
+                    continue
+                }
+                throw APIClientError.networkUnreachable
+            }
+        }
+
+        throw lastError ?? APIClientError.unknown
+    }
+
+    // ═══════════════════════════════════════════════
     // MARK: - License Endpoints
+    // ═══════════════════════════════════════════════
 
     func activate(
         key: String,
@@ -145,31 +360,23 @@ actor APIClient {
         var request = URLRequest(url: baseURL.appendingPathComponent("/api/v1/status"))
         request.httpMethod = "GET"
         request.setValue("NixxTime-iOS/1.0", forHTTPHeaderField: "User-Agent")
-
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIClientError.networkUnreachable
-        }
-        guard (200..<300).contains(httpResponse.statusCode) else {
-            throw APIClientError.serverError(httpResponse.statusCode)
-        }
-
-        do {
-            return try decoder.decode(ServerStatusResponse.self, from: data)
-        } catch {
-            throw APIClientError.decodingFailed
-        }
+        request.timeoutInterval = 30
+        return try await performRequest(request)
     }
 
+    // ═══════════════════════════════════════════════
     // MARK: - Server-side Patches
+    // ═══════════════════════════════════════════════
 
     func fetchPatchList(
         deviceID: String,
         license: String,
         target: String? = nil
     ) async throws -> [ServerPatchMetadata] {
-        var components = URLComponents(url: baseURL.appendingPathComponent("/api/v1/patches/list"), resolvingAgainstBaseURL: false)!
+        var components = URLComponents(
+            url: baseURL.appendingPathComponent("/api/v1/patches/list"),
+            resolvingAgainstBaseURL: false
+        )!
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "device_id", value: deviceID),
             URLQueryItem(name: "license", value: license)
@@ -182,20 +389,14 @@ actor APIClient {
         var request = URLRequest(url: components.url!)
         request.httpMethod = "GET"
         request.setValue("NixxTime-iOS/1.0", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 30
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw APIClientError.networkUnreachable
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            throw APIClientError.serverError(http.statusCode)
-        }
+        let response: PatchListResponse = try await performRequest(request)
 
-        let decoded = try decoder.decode(PatchListResponse.self, from: data)
-        guard decoded.success else {
+        guard response.success else {
             throw APIClientError.serverError(0)
         }
-        return decoded.patches ?? []
+        return response.patches ?? []
     }
 
     func downloadPatch(
@@ -203,7 +404,10 @@ actor APIClient {
         deviceID: String,
         license: String
     ) async throws -> Data {
-        var components = URLComponents(url: baseURL.appendingPathComponent("/api/v1/patches/download/\(id)"), resolvingAgainstBaseURL: false)!
+        var components = URLComponents(
+            url: baseURL.appendingPathComponent("/api/v1/patches/download/\(id)"),
+            resolvingAgainstBaseURL: false
+        )!
         components.queryItems = [
             URLQueryItem(name: "device_id", value: deviceID),
             URLQueryItem(name: "license", value: license)
@@ -212,7 +416,7 @@ actor APIClient {
         var request = URLRequest(url: components.url!)
         request.httpMethod = "GET"
         request.setValue("NixxTime-iOS/1.0", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 120
+        request.timeoutInterval = 120  // patch gede
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
@@ -224,7 +428,9 @@ actor APIClient {
         return data
     }
 
-    // MARK: - Private
+    // ═══════════════════════════════════════════════
+    // MARK: - Private POST
+    // ═══════════════════════════════════════════════
 
     private func post<T: Decodable>(
         path: String,
@@ -235,29 +441,8 @@ actor APIClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("NixxTime-iOS/1.0", forHTTPHeaderField: "User-Agent")
         request.httpBody = try encoder.encode(body)
+        request.timeoutInterval = 30
 
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIClientError.networkUnreachable
-        }
-
-        if httpResponse.statusCode == 503 {
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let errorMsg = json["error"] as? String {
-                throw APIClientError.maintenance(errorMsg)
-            }
-            throw APIClientError.maintenance("Server is under maintenance.")
-        }
-
-        guard (200..<500).contains(httpResponse.statusCode) else {
-            throw APIClientError.serverError(httpResponse.statusCode)
-        }
-
-        do {
-            return try decoder.decode(T.self, from: data)
-        } catch {
-            throw APIClientError.decodingFailed
-        }
+        return try await performRequest(request)
     }
 }
