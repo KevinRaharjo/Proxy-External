@@ -81,6 +81,10 @@
 		3105U200 /* AnnouncementModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105U201 /* AnnouncementModels.swift */; };
 		3105U202 /* AnnouncementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105U203 /* AnnouncementService.swift */; };
 		3105U206 /* InfoTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105U207 /* InfoTabView.swift */; };
+		3105V001 /* SecureZIPArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105V002 /* SecureZIPArchive.swift */; };
+		3105V003 /* SupportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105V004 /* SupportPolicy.swift */; };
+		3105V005 /* SupportedVersionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105V006 /* SupportedVersionsService.swift */; };
+		3105V007 /* Utils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105V008 /* Utils.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -178,6 +182,10 @@
 		3105U201 /* AnnouncementModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementModels.swift; sourceTree = "<group>"; };
 		3105U203 /* AnnouncementService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementService.swift; sourceTree = "<group>"; };
 		3105U207 /* InfoTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoTabView.swift; sourceTree = "<group>"; };
+		3105V002 /* SecureZIPArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureZIPArchive.swift; sourceTree = "<group>"; };
+		3105V004 /* SupportPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportPolicy.swift; sourceTree = "<group>"; };
+		3105V006 /* SupportedVersionsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportedVersionsService.swift; sourceTree = "<group>"; };
+		3105V008 /* Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utils.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -311,6 +319,10 @@
 				3105A025 /* Utils.swift */,
 				3105A026 /* SBX.swift */,
 				3105A027 /* MG.swift */,
+				3105V002 /* SecureZIPArchive.swift */,
+				3105V004 /* SupportPolicy.swift */,
+				3105V006 /* SupportedVersionsService.swift */,
+				3105V008 /* Utils.swift */,
 			);
 			path = helpers;
 			sourceTree = "<group>";
@@ -475,6 +487,10 @@
 				3105U200,
 				3105U202,
 				3105U206,
+				3105V001,
+				3105V003,
+				3105V005,
+				3105V007,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
