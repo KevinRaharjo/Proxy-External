@@ -3,6 +3,7 @@ import UIKit
 import Security
 
 enum FFGuestReset {
+
     /// Free Fire bundle IDs — covers both Garena and DTS variants.
     static let ffBundleIDs = [
         // FF Normal
@@ -13,26 +14,40 @@ enum FFGuestReset {
         "com.garena.game.kgid"        // Garena variant
     ]
 
-    /// Bundle IDs that belong to "Normal" FF.
     private static let normalBundles: Set<String> = [
         "com.dts.freefireth",
         "com.garena.game.kgth"
     ]
 
-    /// Bundle IDs that belong to "Max" FF.
     private static let maxBundles: Set<String> = [
         "com.dts.freefiremax",
         "com.garena.game.kgid"
     ]
 
+    /// ═══════════════════════════════════════════════════════════════
+    /// MARK: - LocalConfig.json Content
+    /// ═══════════════════════════════════════════════════════════════
+    ///
+    /// File ini di-write ke Documents/LocalConfig.json
+    /// FF baca → liat resetGuest: true → FF reset guest sendiri
+    ///
+    /// testCodePatch: true → buat bypass patch verification FF
+    /// resetGuest: true → trigger guest reset
+    ///
+    static let localConfigContent = """
+    {"testCodePatch":true,"resetGuest":true}
+    """
+
+    /// ═══════════════════════════════════════════════════════════════
+    /// MARK: - Main Reset
+    /// ═══════════════════════════════════════════════════════════════
+
     /// Reset all FF guest data on this device.
-    /// After reset, FF will create a fresh guest account on next launch.
-    /// Works best for soft bans (7 days, 30 days).
+    /// Setelah reset, FF bakal create fresh guest account next launch.
     static func resetAllGuests() throws -> ResetReport {
         var report = ResetReport()
 
         for bundleID in ffBundleIDs {
-            // Skip bundles that aren't installed
             guard ContainerStore.resolveAppContainerPath(bundleID: bundleID) != nil else {
                 log("FFGuestReset: skip \(bundleID) — not installed")
                 continue
@@ -48,129 +63,112 @@ enum FFGuestReset {
     }
 
     /// Reset guest for a single FF bundle.
+    /// Write `{"testCodePatch":true,"resetGuest":true}` to Documents/LocalConfig.json
     static func resetGuest(bundleID: String) throws -> Int {
         guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID),
               ContainerStore.isApplicationContainerPath(containerPath) else {
-            throw NSError(domain: "FFGuestReset", code: 1,
-                         userInfo: [NSLocalizedDescriptionKey: "FF container not found for \(bundleID)"])
+            throw NSError(
+                domain: "FFGuestReset",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "FF container not found for \(bundleID)"]
+            )
         }
 
         let containerURL = URL(fileURLWithPath: containerPath, isDirectory: true)
         let fm = FileManager.default
-        var deletedCount = 0
+        var writtenCount = 0
 
-        // ═══════════════════════════════════════════════
-        // 1. Delete `reset_guest.flag` (guest reset marker)
-        //    FF creates this when resetting; if it exists,
-        //    FF skips reset. Deleting it forces a new reset.
-        // ═══════════════════════════════════════════════
-        let resetFlagPath = containerURL.appendingPathComponent("Documents/reset_guest.flag")
-        if fm.fileExists(atPath: resetFlagPath.path) {
-            try? fm.removeItem(at: resetFlagPath)
-            deletedCount += 1
-            log("FFGuestReset: deleted Documents/reset_guest.flag")
+        log("FFGuestReset: container = \(containerPath)")
+
+        // ═══════════════════════════════════════════════════════════════
+        // 1. Ensure Documents folder exists
+        // ═══════════════════════════════════════════════════════════════
+        let documentsURL = containerURL.appendingPathComponent("Documents", isDirectory: true)
+        if !fm.fileExists(atPath: documentsURL.path) {
+            try fm.createDirectory(at: documentsURL, withIntermediateDirectories: true)
+            log("FFGuestReset: created Documents folder")
         }
 
-        // ═══════════════════════════════════════════════
-        // 2. Delete device_id / guest account files
-        // ═══════════════════════════════════════════════
-        let deviceIDFiles = [
-            "Documents/device_id.txt",
-            "Documents/ff_device_id",
-            "Documents/.device_id",
-            "Documents/UserInfo.dat",
-            "Documents/Account.dat",
-            "Documents/guest.dat",
-            "Documents/user_account.txt",
-            "Documents/DeviceInfo.dat",
-            "Library/Caches/device_id.dat",
-            "Library/Caches/com.garena.device.plist",
-            "Library/Caches/com.dts.device.plist",
-            "Library/Preferences/com.garena.device.plist",
-            "Library/Preferences/com.dts.device.plist"
-        ]
+        // ═══════════════════════════════════════════════════════════════
+        // 2. WRITE LocalConfig.json (overwrite existing)
+        // ═══════════════════════════════════════════════════════════════
+        let localConfigPath = documentsURL.appendingPathComponent("LocalConfig.json")
 
-        for relativePath in deviceIDFiles {
-            let fileURL = containerURL.appendingPathComponent(relativePath)
-            if fm.fileExists(atPath: fileURL.path) {
-                try? fm.removeItem(at: fileURL)
-                deletedCount += 1
-                log("FFGuestReset: deleted \(relativePath)")
+        do {
+            // Backup dulu kalau ada (buat restore kalau gagal)
+            var backupData: Data?
+            if fm.fileExists(atPath: localConfigPath.path) {
+                backupData = try? Data(contentsOf: localConfigPath)
+                log("FFGuestReset: backed up existing LocalConfig.json (\(backupData?.count ?? 0) bytes)")
             }
-        }
 
-        // ═══════════════════════════════════════════════
-        // 3. Delete Garena / DTS Preferences
-        // ═══════════════════════════════════════════════
-        let prefsDir = containerURL.appendingPathComponent("Library/Preferences")
-        if let files = try? fm.contentsOfDirectory(at: prefsDir, includingPropertiesForKeys: nil) {
-            for file in files where file.pathExtension == "plist" {
-                let name = file.lastPathComponent.lowercased()
-                if name.contains("garena") || name.contains("dts") ||
-                   name.contains("kgth") || name.contains("kgid") ||
-                   name.contains("freefire") || name.contains("ff.") {
-                    try? fm.removeItem(at: file)
-                    deletedCount += 1
-                    log("FFGuestReset: deleted prefs \(file.lastPathComponent)")
-                }
+            // Tulis content baru
+            guard let data = localConfigContent.data(using: .utf8) else {
+                throw NSError(
+                    domain: "FFGuestReset",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to encode LocalConfig content"]
+                )
             }
-        }
 
-        // ═══════════════════════════════════════════════
-        // 4. Delete Cache related to device/guest
-        // ═══════════════════════════════════════════════
-        let cachesDirs = [
-            "Library/Caches",
-            "Library/Caches/com.garena.game.kgth",
-            "Library/Caches/com.garena.game.kgid",
-            "Library/Caches/com.dts.freefireth",
-            "Library/Caches/com.dts.freefiremax"
-        ]
+            try data.write(to: localConfigPath, options: .atomic)
 
-        for cachesDir in cachesDirs {
-            let dirURL = containerURL.appendingPathComponent(cachesDir)
-            guard fm.fileExists(atPath: dirURL.path) else { continue }
-            if let files = try? fm.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: nil) {
-                for file in files {
-                    let name = file.lastPathComponent.lowercased()
-                    if name.contains("device") || name.contains("guest") ||
-                       name.contains("token") || name.contains("session") {
-                        try? fm.removeItem(at: file)
-                        deletedCount += 1
-                        log("FFGuestReset: deleted cache \(name)")
-                    }
-                }
+            // Verify
+            guard fm.fileExists(atPath: localConfigPath.path) else {
+                throw NSError(
+                    domain: "FFGuestReset",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "LocalConfig.json was not written"]
+                )
             }
+
+            // Verify content
+            let verifyData = try Data(contentsOf: localConfigPath)
+            let verifyString = String(data: verifyData, encoding: .utf8) ?? ""
+            log("FFGuestReset: ✅ wrote LocalConfig.json: \(verifyString)")
+
+            writtenCount += 1
+
+            // Set file permission biar FF bisa baca
+            try? fm.setAttributes(
+                [.posixPermissions: 0o644],
+                ofItemAtPath: localConfigPath.path
+            )
+
+        } catch {
+            log("FFGuestReset: ❌ failed to write LocalConfig.json — \(error.localizedDescription)")
+            throw error
         }
 
-        // ═══════════════════════════════════════════════
-        // 5. Delete Keychain Garena / DTS
-        // ═══════════════════════════════════════════════
-        let keychainServices = [
-            "com.garena.game.kgth",
-            "com.garena.game.kgid",
-            "com.dts.freefireth",
-            "com.dts.freefiremax",
-            "com.garena.ff",
-            "com.garena.device",
-            "com.dts.ff",
-            "com.dts.device"
-        ]
-
-        for service in keychainServices {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: service
-            ]
-            let status = SecItemDelete(query as CFDictionary)
-            if status == errSecSuccess {
-                deletedCount += 1
-                log("FFGuestReset: deleted keychain \(service)")
-            }
+        // ═══════════════════════════════════════════════════════════════
+        // 3. Also write reset_guest.flag (marker tambahan)
+        // ═══════════════════════════════════════════════════════════════
+        let resetFlagPath = documentsURL.appendingPathComponent("reset_guest.flag")
+        do {
+            try localConfigContent.write(to: resetFlagPath, atomically: true, encoding: .utf8)
+            writtenCount += 1
+            log("FFGuestReset: ✅ wrote reset_guest.flag")
+        } catch {
+            log("FFGuestReset: ⚠️ failed to write reset_guest.flag — \(error.localizedDescription)")
+            // Non-fatal, tetep lanjut
         }
 
-        log("FFGuestReset: total deleted for \(bundleID) = \(deletedCount)")
-        return deletedCount
+        // ═══════════════════════════════════════════════════════════════
+        // 4. VERIFY — pastikan file ada & content bener
+        // ═══════════════════════════════════════════════════════════════
+        let finalData = try? Data(contentsOf: localConfigPath)
+        let finalString = finalData.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        let expected = localConfigContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        let actual = finalString.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if actual != expected {
+            log("FFGuestReset: ⚠️ content mismatch — expected: \(expected), actual: \(actual)")
+        } else {
+            log("FFGuestReset: ✅ verification passed")
+        }
+
+        log("FFGuestReset: total written for \(bundleID) = \(writtenCount)")
+        return writtenCount
     }
 
     /// Check if FF is installed.
@@ -191,11 +189,29 @@ enum FFGuestReset {
         return (normal, max)
     }
 
+    /// Cek apakah file LocalConfig.json udah ada content reset
+    static func isResetPending(bundleID: String) -> Bool {
+        guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
+            return false
+        }
+        let path = URL(fileURLWithPath: containerPath, isDirectory: true)
+            .appendingPathComponent("Documents/LocalConfig.json")
+        guard let data = try? Data(contentsOf: path),
+              let content = String(data: data, encoding: .utf8) else {
+            return false
+        }
+        return content.contains("\"resetGuest\":true")
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // MARK: - Report
+    // ═══════════════════════════════════════════════════════════════
+
     struct ResetReport {
         var perBundle: [String: Int] = [:]
         var errors: [String: String] = [:]
 
-        var totalDeleted: Int { perBundle.values.reduce(0, +) }
+        var totalWritten: Int { perBundle.values.reduce(0, +) }
 
         var summary: String {
             if perBundle.isEmpty && errors.isEmpty {
@@ -211,7 +227,7 @@ enum FFGuestReset {
                 } else {
                     short = bundleID
                 }
-                lines.append("✓ \(short): \(count) files deleted")
+                lines.append("✓ \(short): LocalConfig.json written (\(count) files)")
             }
             for (bundleID, error) in errors {
                 lines.append("✗ \(bundleID): \(error)")
