@@ -6,6 +6,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var licenseManager: LicenseManager
+    @EnvironmentObject private var remoteConfig: RemoteConfigService
     @State private var showSettings = false
     @State private var showCleaner = false
     @State private var showInfo = false
@@ -41,6 +42,54 @@ struct ContentView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 18) {
+                    // ═══ REMOTE CONFIG: MAINTENANCE BANNER ═══
+                    if let banner = remoteConfig.maintenanceBanner {
+                        HStack(spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(AppTheme.warning)
+                            Text(banner)
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundStyle(AppTheme.silver)
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(3)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(AppTheme.warning.opacity(0.10))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(AppTheme.warning.opacity(0.4), lineWidth: 1)
+                        )
+                    }
+
+                    // ═══ REMOTE CONFIG: WELCOME MESSAGE ═══
+                    if let welcome = remoteConfig.welcomeMessage {
+                        HStack(spacing: 10) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(AppTheme.accentBright)
+                            Text(welcome)
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundStyle(AppTheme.silver)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(AppTheme.accent.opacity(0.08))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(AppTheme.accent.opacity(0.35), lineWidth: 1)
+                        )
+                    }
+
                     brandHeader
                     categorySelector
                     patchOptions
@@ -112,6 +161,10 @@ struct ContentView: View {
     private func syncPatchesFromServer() {
         guard licenseManager.isActive else {
             log("patch-sync: license not active, skipping")
+            return
+        }
+        guard remoteConfig.isPatchSyncEnabled else {
+            log("patch-sync: disabled via remote config")
             return
         }
         guard let licenseKey = licenseManager.rememberedKey(), !licenseKey.isEmpty else {
@@ -523,30 +576,32 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
 
-                Button {
-                    showCleaner = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "trash.slash.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(AppTheme.silver)
-                        Text("Clean Cache & Temp")
-                            .font(.system(size: 13, weight: .black, design: .rounded))
-                            .foregroundStyle(AppTheme.silver)
-                        Spacer()
+                if remoteConfig.isCleanerEnabled {
+                    Button {
+                        showCleaner = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "trash.slash.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(AppTheme.silver)
+                            Text("Clean Cache & Temp")
+                                .font(.system(size: 13, weight: .black, design: .rounded))
+                                .foregroundStyle(AppTheme.silver)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(AppTheme.surfaceElevated)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(AppTheme.borderHighlight, lineWidth: 0.8)
+                        )
                     }
-                    .padding(.horizontal, 14)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(AppTheme.surfaceElevated)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(AppTheme.borderHighlight, lineWidth: 0.8)
-                    )
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -583,7 +638,8 @@ struct ContentView: View {
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundStyle(AppTheme.accentBright.opacity(0.85))
             Button {
-                guard let url = URL(string: "https://t.me/nixxtime") else { return }
+                let urlStr = remoteConfig.supportTelegram ?? "https://t.me/nixxtime"
+                guard let url = URL(string: urlStr) else { return }
                 UIApplication.shared.open(url)
             } label: {
                 Label("Open Channel", systemImage: "paperplane.fill")
