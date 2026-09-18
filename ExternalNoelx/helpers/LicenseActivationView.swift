@@ -8,13 +8,16 @@ struct LicenseActivationView: View {
     @State private var glowPulse = false
     @State private var borderPhase = false
 
-    // ═══ REMOTE CONFIG: dynamic support links ═══
     private var supportWhatsApp: String {
         remoteConfig.supportWhatsApp ?? manager.supportWhatsApp
     }
 
     private var supportTelegram: String {
         remoteConfig.supportTelegram ?? manager.supportTelegram
+    }
+
+    private var isDeviceSupported: Bool {
+        manager.isDeviceSupported
     }
 
     var body: some View {
@@ -28,10 +31,19 @@ struct LicenseActivationView: View {
                         Spacer(minLength: 60)
                         logoSection
                         titleSection
+
+                        // ═══ UNSUPPORTED BANNER ═══
+                        if !isDeviceSupported {
+                            unsupportedBanner
+                                .padding(.horizontal, 22)
+                                .padding(.top, 20)
+                        }
+
                         activationCard
                             .padding(.horizontal, 22)
                             .padding(.top, 24)
                             .id("activation-card")
+
                         contactSection
                             .padding(.top, 22)
                             .padding(.horizontal, 22)
@@ -59,7 +71,33 @@ struct LicenseActivationView: View {
         }
     }
 
-    // MARK: - Scanline background
+    // MARK: - Unsupported Banner
+
+    private var unsupportedBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(BP.warning)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("UNSUPPORTED DEVICE")
+                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                    .tracking(1.2)
+                    .foregroundStyle(BP.warning)
+                Text("iOS \(AppInfo.osVersion) is not supported.\nRequires iOS 17 or newer.")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(BP.textDim)
+                    .multilineTextAlignment(.leading)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(BP.warning.opacity(0.08))
+        .overlay(
+            Rectangle().stroke(BP.warning.opacity(0.4), lineWidth: 0.8)
+        )
+    }
+
+    // MARK: - Scanline
 
     private var scanlineBackground: some View {
         GeometryReader { proxy in
@@ -105,8 +143,6 @@ struct LicenseActivationView: View {
         }
         .padding(.bottom, 22)
     }
-
-    // MARK: - Title
 
     private var titleSection: some View {
         VStack(spacing: 6) {
@@ -164,12 +200,14 @@ struct LicenseActivationView: View {
                         )
                     )
                     .id("license-field")
+                    .disabled(!isDeviceSupported)
 
                 Toggle("Remember on this device", isOn: $manager.rememberKey)
                     .font(.system(size: 11, weight: .heavy, design: .monospaced))
                     .tracking(0.8)
                     .foregroundStyle(BP.textDim)
                     .tint(BP.accent)
+                    .disabled(!isDeviceSupported)
 
                 Button(action: activate) {
                     HStack(spacing: 8) {
@@ -184,8 +222,11 @@ struct LicenseActivationView: View {
                 }
                 .buttonStyle(BPButtonStyle(color: BP.accent, filled: true))
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || manager.isBusy)
-                .opacity(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1.0)
+                .disabled(!isDeviceSupported ||
+                          key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                          manager.isBusy)
+                .opacity((!isDeviceSupported ||
+                          key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? 0.4 : 1.0)
 
                 if let message = manager.message {
                     Text(message)
@@ -262,6 +303,7 @@ struct LicenseActivationView: View {
     // MARK: - Actions
 
     private func activate() {
+        guard isDeviceSupported else { return }
         keyFocused = false
         manager.activate(key: key)
     }
@@ -272,6 +314,9 @@ struct LicenseActivationView: View {
             return BP.success
         }
         if lower.contains("maintenance") || lower.contains("offline") {
+            return BP.warning
+        }
+        if lower.contains("not supported") {
             return BP.warning
         }
         return BP.danger
