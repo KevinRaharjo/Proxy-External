@@ -6,8 +6,6 @@ import CryptoKit
 @MainActor
 final class LicenseManager: ObservableObject {
 
-    // MARK: - State
-
     enum LicenseState: Equatable {
         case checking
         case active
@@ -16,8 +14,6 @@ final class LicenseManager: ObservableObject {
         case offline
     }
 
-    // MARK: - Published State
-
     @Published private(set) var state: LicenseState = .checking
     @Published private(set) var isBusy = false
     @Published private(set) var message: String?
@@ -25,12 +21,8 @@ final class LicenseManager: ObservableObject {
     @Published private(set) var deviceID: String = ""
     @Published var rememberKey = true
 
-    // MARK: - Config
-
     let supportWhatsApp = "https://wa.me/6281234567890"
     let supportTelegram = "https://t.me/nixxtime"
-
-    // MARK: - Storage
 
     private enum StorageKeys {
         static let licenseKey = "com.nixxtime.license_key"
@@ -42,20 +34,16 @@ final class LicenseManager: ObservableObject {
     }
 
     private let offlineGracePeriod: TimeInterval = 24 * 60 * 60
-    private let foregroundReverifyInterval: TimeInterval = 3600 // 1 jam
+    private let foregroundReverifyInterval: TimeInterval = 3600
     private let minimumAttemptInterval: TimeInterval = 1.0
 
     private var lastAttemptAt: Date?
     private var isVerifying = false
 
-    // MARK: - Init
-
     init() {
         deviceID = Self.computeDeviceID()
         state = .checking
     }
-
-    // MARK: - Convenience
 
     var isActive: Bool {
         if case .active = state { return true }
@@ -72,22 +60,25 @@ final class LicenseManager: ObservableObject {
         return nil
     }
 
+    // MARK: - Device Support Check
+
+    /// Cek apakah device support kernel exploit
+    var isDeviceSupported: Bool {
+        let v = AppInfo.versionTuple
+        return ExploitSupportPolicy.isSupported(
+            major: v.major,
+            minor: v.minor,
+            patch: v.patch,
+            build: AppInfo.osBuild
+        )
+    }
+
     // MARK: - Foreground Guard
 
-    /// Cek apakah perlu re-verify saat app masuk foreground.
-    /// Return true hanya kalau lisensi belum aktif ATAU sudah 1 jam sejak verify terakhir.
     func shouldReverifyOnForeground() -> Bool {
-        // Kalau belum aktif (baru buka / logout) → selalu verify
-        if !isActive {
-            return true
-        }
+        if !isActive { return true }
+        if isVerifying { return false }
 
-        // Kalau sedang verify → jangan verify lagi
-        if isVerifying {
-            return false
-        }
-
-        // Cek waktu verify terakhir
         let last = UserDefaults.standard.object(forKey: StorageKeys.lastForegroundVerify) as? Date
             ?? .distantPast
         let elapsed = Date().timeIntervalSince(last)
@@ -96,13 +87,19 @@ final class LicenseManager: ObservableObject {
             UserDefaults.standard.set(Date(), forKey: StorageKeys.lastForegroundVerify)
             return true
         }
-
         return false
     }
 
     // MARK: - Launch
 
     func beginLaunchSession() {
+        // ═══ CEK DEVICE SUPPORT DULU ═══
+        guard isDeviceSupported else {
+            state = .inactive
+            message = "iOS \(AppInfo.osVersion) is not supported. Please use iOS 17 or newer."
+            return
+        }
+
         guard let token = UserDefaults.standard.string(forKey: StorageKeys.sessionToken),
               UserDefaults.standard.string(forKey: StorageKeys.licenseKey) != nil else {
             state = .inactive
@@ -110,20 +107,14 @@ final class LicenseManager: ObservableObject {
             return
         }
 
-        // Kalau sedang verify, jangan spawn task baru
-        if isVerifying {
-            return
-        }
+        if isVerifying { return }
 
-        // Kalau sudah active dan verify < 5 menit lalu, skip
         if case .active = state,
            let lastVerified = UserDefaults.standard.object(forKey: StorageKeys.lastVerified) as? Date,
            Date().timeIntervalSince(lastVerified) < 300 {
             return
         }
 
-        // Kalau state bukan active, tampilkan loading
-        // Kalau sudah active, jangan set checking — verify di background saja
         let wasActive = isActive
 
         if !wasActive {
@@ -149,10 +140,7 @@ final class LicenseManager: ObservableObject {
                     return
                 }
 
-                let response = try await APIClient.shared.verify(
-                    token: token,
-                    deviceID: deviceID
-                )
+                let response = try await APIClient.shared.verify(token: token, deviceID: deviceID)
 
                 await MainActor.run {
                     self.isBusy = false
@@ -194,6 +182,13 @@ final class LicenseManager: ObservableObject {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isBusy else { return }
 
+        // ═══ CEK DEVICE SUPPORT DULU ═══
+        guard isDeviceSupported else {
+            message = "iOS \(AppInfo.osVersion) is not supported. Please use iOS 17 or newer."
+            state = .inactive
+            return
+        }
+
         if let last = lastAttemptAt, Date().timeIntervalSince(last) < minimumAttemptInterval {
             message = "Please wait a moment before trying again"
             return
@@ -212,10 +207,7 @@ final class LicenseManager: ObservableObject {
 
         Task {
             do {
-                let response = try await APIClient.shared.activate(
-                    key: trimmed,
-                    device: device
-                )
+                let response = try await APIClient.shared.activate(key: trimmed, device: device)
 
                 await MainActor.run {
                     self.isBusy = false
@@ -274,10 +266,7 @@ final class LicenseManager: ObservableObject {
 
         Task {
             do {
-                _ = try await APIClient.shared.deactivate(
-                    token: token,
-                    deviceID: deviceID
-                )
+                _ = try await APIClient.shared.deactivate(token: token, deviceID: deviceID)
             } catch {
                 // Ignore offline error
             }
@@ -290,17 +279,10 @@ final class LicenseManager: ObservableObject {
         }
     }
 
-    // MARK: - Retry (untuk maintenance)
+    // MARK: - Retry / Refresh
 
-    func retry() {
-        beginLaunchSession()
-    }
-
-    // MARK: - Refresh
-
-    func refresh() {
-        beginLaunchSession()
-    }
+    func retry() { beginLaunchSession() }
+    func refresh() { beginLaunchSession() }
 
     // MARK: - Remembered Key
 
@@ -324,21 +306,18 @@ final class LicenseManager: ObservableObject {
     }
 
     private func handleMaintenanceOrOffline(error: APIClientError, wasActive: Bool) {
-        // Cek maintenance
         if case .maintenance(let msg) = error {
             state = .maintenance(message: msg)
             message = msg
             return
         }
 
-        // Kalau sebelumnya sudah active, jangan reset ke inactive — biarkan tetap active
         if wasActive {
             state = .active
             message = "Offline mode"
             return
         }
 
-        // Cek grace period offline
         guard let lastVerified = UserDefaults.standard.object(forKey: StorageKeys.lastVerified) as? Date else {
             state = .inactive
             message = "Cannot verify license. Check your connection."
