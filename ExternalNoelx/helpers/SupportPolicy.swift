@@ -1,13 +1,14 @@
 import Foundation
 
 enum ExploitSupportPolicy {
-    // MARK: - Fallback (kalo server gak reachable)
+
+    // MARK: - Fallback ranges
 
     static let fallbackVerifiedIOS17Range = "17.0–17.7.x"
     static let fallbackVerifiedIOS18Range = "18.0–18.7.1"
     static let fallbackVerifiedIOS26Range = "26.0–26.6.2"
 
-    // MARK: - Display ranges (buat Settings UI)
+    // MARK: - Display ranges
 
     static var verifiedIOS17Range: String {
         serverRange(for: 17) ?? fallbackVerifiedIOS17Range
@@ -33,10 +34,12 @@ enum ExploitSupportPolicy {
     static func supportsKernelExploit(major: Int, minor: Int, patch: Int) -> Bool {
         guard minor >= 0, patch >= 0 else { return false }
 
+        // iOS 17.x
         if major == 17 {
             return minor <= 7
         }
 
+        // iOS 18.x
         if major == 18 {
             return minor < 7 || (minor == 7 && patch <= 1)
         }
@@ -45,17 +48,14 @@ enum ExploitSupportPolicy {
     }
 
     static func isSupported(major: Int, minor: Int, patch: Int, build: String) -> Bool {
-        // 1. iOS 17-18: hardcoded (stable)
         if supportsKernelExploit(major: major, minor: minor, patch: patch) {
             return true
         }
 
-        // 2. iOS 26+: cek server
         if let status = SupportedVersionsStore.status(major: major, minor: minor, patch: patch) {
             return status == "verified" || status == "experimental"
         }
 
-        // 3. Fallback
         return fallbackIsSupported(major: major, minor: minor, patch: patch, build: build)
     }
 
@@ -73,6 +73,8 @@ enum ExploitSupportPolicy {
 
         return false
     }
+
+    // MARK: - iOS 27 builds
 
     static let verifiedIOS27Builds: [(beta: Int, publicBeta: Int?, build: String)] = [
         (1, nil, "24A5355q"),
