@@ -34,12 +34,10 @@ enum ExploitSupportPolicy {
     static func supportsKernelExploit(major: Int, minor: Int, patch: Int) -> Bool {
         guard minor >= 0, patch >= 0 else { return false }
 
-        // iOS 17.x
         if major == 17 {
             return minor <= 7
         }
 
-        // iOS 18.x
         if major == 18 {
             return minor < 7 || (minor == 7 && patch <= 1)
         }
