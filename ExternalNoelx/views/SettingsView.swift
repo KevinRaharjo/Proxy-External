@@ -305,7 +305,6 @@ struct SettingsView: View {
 
     private func rangeFor(major: Int) -> String {
         switch major {
-        case 16: return ExploitSupportPolicy.verifiedIOS16Range
         case 17: return ExploitSupportPolicy.verifiedIOS17Range
         case 18: return ExploitSupportPolicy.verifiedIOS18Range
         case 26: return ExploitSupportPolicy.verifiedIOS26Range
@@ -314,7 +313,7 @@ struct SettingsView: View {
     }
 
     private func otherVersions(current: Int) -> [Int] {
-        [16, 17, 18, 26].filter { $0 != current }
+        [17, 18, 26].filter { $0 != current }
     }
 
     // MARK: - 05 GUEST RESET
@@ -428,13 +427,6 @@ struct SettingsView: View {
     private func performGuestReset() {
         isResettingGuest = true
 
-        // ⚠️ Pastiin FF closed dulu
-        let runningApps = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .compactMap { $0.rootViewController }
-
-        // Log running state (optional, kalau mau detect FF running)
         log("SettingsView: performing guest reset...")
 
         DispatchQueue.global(qos: .userInitiated).async {
