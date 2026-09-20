@@ -63,7 +63,7 @@ final class LicenseManager: ObservableObject {
     // MARK: - Device Support Check (SYNC)
 
     /// Cek device support pake data yang udah ada (sync, cepat).
-    /// Pake ini buat UI rendering. Buat logic penting, pake `isDeviceSupportedAsync()`.
+    /// Pake ini buat UI rendering (banner, dll).
     var isDeviceSupported: Bool {
         let v = AppInfo.versionTuple
         return ExploitSupportPolicy.isSupported(
@@ -110,19 +110,20 @@ final class LicenseManager: ObservableObject {
     func beginLaunchSession() {
         // ═══ CEK DEVICE SUPPORT DULU (server-first) ═══
         Task {
-            // Fetch server dulu biar SupportedVersionsStore ke-populate
+            // 1. Fetch server biar SupportedVersionsStore ke-populate
             await SupportedVersionsService.shared.ensureLoaded()
 
+            // 2. Cek support pake server data
             let supported = await isDeviceSupportedAsync()
             guard supported else {
                 await MainActor.run {
                     self.state = .inactive
-                    self.message = "iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) is not supported. Please use a supported version."
+                    self.message = "iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) is not supported."
                 }
                 return
             }
 
-            // Sekarang lanjut verify license
+            // 3. Lanjut verify license
             await self.performLaunchVerification()
         }
     }
@@ -194,7 +195,7 @@ final class LicenseManager: ObservableObject {
         }
     }
 
-    // MARK: - Activate
+    // MARK: - Activate (ASYNC, server-first)
 
     func activate(key: String) {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
