@@ -20,6 +20,16 @@ struct LicenseActivationView: View {
         manager.isDeviceSupported
     }
 
+    private var isBusy: Bool {
+        manager.isBusy
+    }
+
+    private var canActivate: Bool {
+        isDeviceSupported &&
+        !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !isBusy
+    }
+
     var body: some View {
         ZStack {
             BP.bg.ignoresSafeArea()
@@ -83,9 +93,13 @@ struct LicenseActivationView: View {
                     .font(.system(size: 10, weight: .heavy, design: .monospaced))
                     .tracking(1.2)
                     .foregroundStyle(BP.warning)
-                Text("iOS \(AppInfo.osVersion) is not supported.\nRequires iOS 17 or newer.")
+                Text("iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) is not supported.")
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(BP.textDim)
+                    .multilineTextAlignment(.leading)
+                Text("Supported: iOS 17.0–17.7.x · 18.0–18.7.1 · 26.0–26.6.2 · 27.0+")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(BP.textFaint)
                     .multilineTextAlignment(.leading)
             }
             Spacer(minLength: 0)
@@ -168,10 +182,10 @@ struct LicenseActivationView: View {
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundStyle(BP.accent.opacity(0.5))
                 Spacer()
-                Text(manager.isBusy ? "VERIFYING…" : "READY")
+                Text(isBusy ? "VERIFYING…" : "READY")
                     .font(.system(size: 9, weight: .heavy, design: .monospaced))
                     .tracking(1.5)
-                    .foregroundStyle(manager.isBusy ? BP.warning : BP.accent)
+                    .foregroundStyle(isBusy ? BP.warning : BP.accent)
             }
             .padding(.horizontal, 14)
             .padding(.top, 12)
@@ -211,22 +225,19 @@ struct LicenseActivationView: View {
 
                 Button(action: activate) {
                     HStack(spacing: 8) {
-                        if manager.isBusy {
+                        if isBusy {
                             ProgressView().tint(BP.bg).scaleEffect(0.8)
                         } else {
                             Image(systemName: "checkmark.shield.fill")
                                 .font(.system(size: 13, weight: .black))
                         }
-                        Text(manager.isBusy ? "VERIFYING…" : "ACTIVATE")
+                        Text(isBusy ? "VERIFYING…" : "ACTIVATE")
                     }
                 }
                 .buttonStyle(BPButtonStyle(color: BP.accent, filled: true))
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .disabled(!isDeviceSupported ||
-                          key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                          manager.isBusy)
-                .opacity((!isDeviceSupported ||
-                          key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? 0.4 : 1.0)
+                .disabled(!canActivate)
+                .opacity(canActivate ? 1.0 : 0.4)
 
                 if let message = manager.message {
                     Text(message)
@@ -304,6 +315,8 @@ struct LicenseActivationView: View {
 
     private func activate() {
         guard isDeviceSupported else { return }
+        guard !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !isBusy else { return }
         keyFocused = false
         manager.activate(key: key)
     }
