@@ -17,4 +17,5 @@
 #import "DualBackend/DualBackendConfig.h"
 
 // BadKernel (cloned at build time into ExternalNoelx/BadKernel/)
-#import "BadKernel/BadKernel.h"
+// HEADER_SEARCH_PATHS includes ExternalNoelx/BadKernel, so no prefix.
+#import "BadKernel.h"
