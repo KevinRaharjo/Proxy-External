@@ -173,21 +173,27 @@ struct OnboardingView: View {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // MARK: - Versions Page (UPDATED: iOS 27 support, dynamic ranges)
+    // ═══════════════════════════════════════════════════════════════
+
     private var versionsPage: some View {
         VStack(spacing: 16) {
             Spacer(minLength: 8)
-             ZStack {
-                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                     .fill(Color(uiColor: .secondarySystemBackground))
-                     .overlay(
-                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                             .stroke(AppTheme.accent.opacity(0.3), lineWidth: 1)
-                     )
-                     .frame(width: 72, height: 72)
-                 Image(systemName: "iphone.gen2")
-                     .font(.system(size: 30, weight: .medium))
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(AppTheme.accent.opacity(0.3), lineWidth: 1)
+                    )
+                    .frame(width: 72, height: 72)
+                Image(systemName: "iphone.gen2")
+                    .font(.system(size: 30, weight: .medium))
                     .foregroundStyle(AppTheme.accent)
             }
+
             VStack(spacing: 8) {
                 Text(language.text("onboarding.versions_title"))
                     .font(.title3.weight(.bold))
@@ -198,36 +204,42 @@ struct OnboardingView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 22)
             }
+
+            // ═══ DYNAMIC VERSION ROWS (dari server, fallback ke hardcoded) ═══
             VStack(alignment: .leading, spacing: 10) {
-                versionRow(icon: "checkmark.circle.fill", title: "iOS 17", value: ExploitSupportPolicy.verifiedIOS17Range, color: .green)
-                versionRow(icon: "checkmark.circle.fill", title: "iOS 18", value: ExploitSupportPolicy.verifiedIOS18Range, color: .green)
-                versionRow(icon: "checkmark.circle.fill", title: "iOS 26", value: ExploitSupportPolicy.verifiedIOS26Range, color: .green)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                        Text("iOS 27.0").font(.subheadline.weight(.semibold))
-                        Spacer()
-                        Text(language.text("onboarding.beta")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    }
-                    ForEach(ExploitSupportPolicy.verifiedIOS27Builds, id: \.build) { v in
-                        HStack {
-                            Text("Beta \(v.beta)" + (v.publicBeta.map { " / Public \($0)" } ?? ""))
-                                .font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                            Spacer()
-                            Text(v.build).font(.caption.monospaced()).foregroundStyle(.secondary)
-                        }
-                        .padding(.leading, 24)
-                    }
-                }
-                .padding(12)
-                 .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                versionRow(
+                    icon: "checkmark.circle.fill",
+                    title: "iOS 17",
+                    value: ExploitSupportPolicy.verifiedIOS17Range,
+                    color: .green
+                )
+                versionRow(
+                    icon: "checkmark.circle.fill",
+                    title: "iOS 18",
+                    value: ExploitSupportPolicy.verifiedIOS18Range,
+                    color: .green
+                )
+                versionRow(
+                    icon: "checkmark.circle.fill",
+                    title: "iOS 26",
+                    value: ExploitSupportPolicy.verifiedIOS26Range,
+                    color: .green
+                )
+                versionRow(
+                    icon: "checkmark.circle.fill",
+                    title: "iOS 27",
+                    value: ExploitSupportPolicy.verifiedIOS27Range,
+                    color: .green
+                )
             }
             .padding(.horizontal, 20)
+
             Text(language.text("onboarding.versions_footer", AppInfo.osVersion, AppInfo.osBuild))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
+
             Spacer(minLength: 8)
         }
     }
