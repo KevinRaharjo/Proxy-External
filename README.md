@@ -1,33 +1,24 @@
-# External Noelx / OGIOS
+# External Nixx — Universal Build (iOS 17–27)
 
-هذا هو المشروع الكامل المرسل في أرشيف MediaFire، وليس نموذجًا جديدًا. يحتوي على مشروع Xcode الأصلي، الشاشات، الخدمات، الأصول، ملفات الـpatch، ووحدات العمل الداخلية.
+Satu IPA. Tiga engine. Auto-select saat runtime.
 
-## البنية
+## Engine matrix
 
-- `ExternalNoelx/views`: واجهات التطبيق ونظام التصميم.
-- `ExternalNoelx/helpers`: الخدمات الداخلية مثل إدارة الملفات، المشاريع، التنظيف، التخزين، الأرشفة، وإدارة التفعيل.
-- `ExternalNoelx/Assets.xcassets`: الأيقونات والصور والخلفيات.
-- `ExternalNoelx/Patches`: حزم patch المضمنة في التطبيق.
-- `ExternalNoelx/exploit` و`ExternalNoelx/kexploit`: ملفات الدعم الأصلية للمشروع كما وردت في المصدر.
-- `ExternalNoelx.xcodeproj`: مشروع Xcode الكامل.
-- `build_unsigned.sh`: بناء IPA غير موقّع على macOS.
+| iOS version | Engine | Catatan |
+|---|---|---|
+| **17.0 – 17.7.x** | `kexploit_opa334` | Kernel R/W + sandbox escape |
+| **18.0 – 18.7.x** | `kexploit_opa334` | Kernel R/W + sandbox escape |
+| **26.0 – 26.6.2** | `kexploit_opa334` → `BadKernel` fallback | Auto-fallback kalau opa334 gagal |
+| **27.0 db1–db4** | `BadKernel` | bad_query + IOSurface K/R/W |
 
-## التفعيل
+## Device support
 
-تم استبدال التحقق الشبكي بمدير تفعيل محلي داخل `helpers/LicenseManager.swift`. لا يحتاج التطبيق إلى API server لتفعيل الترخيص، والمفتاح المقبول هو:
+BadKernel **verified di A13** (iPhone 11 series, SE 2nd gen, iPad 9).
+SoC lain **belum diverifikasi**.
 
-```text
-OGIOS
-```
-
-يحفظ التفعيل في Keychain على الجهاز، ويمكن إزالة التفعيل من داخل التطبيق عبر `deactivate()`.
-
-## البناء
-
-يتطلب البناء جهاز macOS مع Xcode. يمكن تشغيل:
+## Build lokal
 
 ```bash
-./build_unsigned.sh
-```
-
-ثم استخدام GitHub Actions من خلال Workflow البناء الموجود في `.github/workflows/build.yml`.
+git clone https://github.com/YOUR_USER/ExternalNoelx.git
+cd ExternalNoelx
+./build_universal.sh
