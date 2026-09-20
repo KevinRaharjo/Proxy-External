@@ -1,10 +1,9 @@
 //
 //  BadKernel.h
-//  External Nixx — BadKernel header
+//  External Nixx — BadKernel public interface
 //
 //  Real implementation is provided by setup_badkernel.sh at build time.
-//  This placeholder exists so the bridging header can resolve the import
-//  even if the clone step fails.
+//  Keep in sync with BadKernel.m if the upstream changes.
 //
 
 #ifndef BadKernel_h
@@ -16,22 +15,39 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-void BadKernelInit(void);
-void BadKernelDeinit(void);
-bool BadKernelIsReady(void);
+// Log callback used by BadKernelInitWithLog.
+typedef void (*bk_log_func_t)(const char *message);
+
+// ═══════════════════════════════════════════════════════════════
+// MARK: - Lifecycle
+// ═══════════════════════════════════════════════════════════════
+
+int      BadKernelInit(void);
+int      BadKernelInitWithLog(bk_log_func_t log_func);
+int      BadKernelDeinit(void);
+bool     BadKernelIsReady(void);
 uint64_t BadKernelGetBase(void);
 uint64_t BadKernelGetSlide(void);
 
-bool BadKernelKRead(uint64_t addr, void *out, size_t len);
+// ═══════════════════════════════════════════════════════════════
+// MARK: - Kernel R/W
+// ═══════════════════════════════════════════════════════════════
+
+int BadKernelKRead(uint64_t kaddr, void *out, size_t len);
+int BadKernelKWrite(uint64_t kaddr, const void *in, size_t len);
+
 uint32_t BadKernelKRead32(uint64_t addr);
 uint64_t BadKernelKRead64(uint64_t addr);
 
-bool BadKernelKWrite(uint64_t addr, const void *in, size_t len);
-bool BadKernelKWrite32(uint64_t addr, uint32_t val);
-bool BadKernelKWrite64(uint64_t addr, uint64_t val);
+int BadKernelKWrite32(uint64_t kaddr, uint32_t val);
+int BadKernelKWrite64(uint64_t kaddr, uint64_t val);
+
+// ═══════════════════════════════════════════════════════════════
+// MARK: - Sandbox escape
+// ═══════════════════════════════════════════════════════════════
 
 int64_t BadKernelSandboxEscape(const char *path);
-void BadKernelSandboxRelease(int64_t handle);
+void    BadKernelSandboxRelease(int64_t handle);
 
 NS_ASSUME_NONNULL_END
 
