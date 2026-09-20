@@ -18,7 +18,11 @@ enum BadKernelBridge {
         guard !isReady else { return true }
         log("[BadKernel] initializing…")
         let start = Date()
-        BadKernelInit()
+        let ret = BadKernelInit()
+        guard ret == 0 else {
+            log("[BadKernel] ❌ BadKernelInit returned \(ret)")
+            return false
+        }
 
         guard BadKernelIsReady() else {
             log("[BadKernel] ❌ not ready")
@@ -38,7 +42,7 @@ enum BadKernelBridge {
 
     static func deinitialize() {
         guard isReady else { return }
-        BadKernelDeinit()
+        _ = BadKernelDeinit()
         isReady = false
         kernelBase = 0
         kernelSlide = 0
@@ -68,13 +72,19 @@ enum BadKernelBridge {
     static func kread64(_ addr: UInt64) -> UInt64 {
         isReady ? BadKernelKRead64(addr) : 0
     }
+
+    /// Returns true on success (BadKernelKWrite32 returns 0 on success).
     @discardableResult
     static func kwrite32(_ addr: UInt64, _ val: UInt32) -> Bool {
-        isReady ? BadKernelKWrite32(addr, val) : false
+        guard isReady else { return false }
+        return BadKernelKWrite32(addr, val) == 0
     }
+
+    /// Returns true on success (BadKernelKWrite64 returns 0 on success).
     @discardableResult
     static func kwrite64(_ addr: UInt64, _ val: UInt64) -> Bool {
-        isReady ? BadKernelKWrite64(addr, val) : false
+        guard isReady else { return false }
+        return BadKernelKWrite64(addr, val) == 0
     }
 
     // MARK: - Support
