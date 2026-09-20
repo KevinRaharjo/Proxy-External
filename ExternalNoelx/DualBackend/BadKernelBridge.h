@@ -2,6 +2,10 @@
 //  BadKernelBridge.h
 //  External Nixx — dual backend bridge
 //
+//  Exposes BadKernel C API to Swift via the bridging header,
+//  and declares the KRW backend routing helpers used by krw.m
+//  and KRWBackend.m.
+//
 
 #ifndef BadKernelBridge_h
 #define BadKernelBridge_h
@@ -11,6 +15,10 @@
 #import <stdbool.h>
 
 NS_ASSUME_NONNULL_BEGIN
+
+// ═══════════════════════════════════════════════════════════════
+// MARK: - BadKernel C API
+// ═══════════════════════════════════════════════════════════════
 
 void BadKernelInit(void);
 void BadKernelDeinit(void);
@@ -28,6 +36,10 @@ bool BadKernelKWrite64(uint64_t addr, uint64_t val);
 
 int64_t BadKernelSandboxEscape(const char *path);
 void BadKernelSandboxRelease(int64_t handle);
+
+// ═══════════════════════════════════════════════════════════════
+// MARK: - KRW backend routing
+// ═══════════════════════════════════════════════════════════════
 
 typedef NS_ENUM(NSInteger, KRWBackendType) {
     KRWBackendTypeNone = 0,
