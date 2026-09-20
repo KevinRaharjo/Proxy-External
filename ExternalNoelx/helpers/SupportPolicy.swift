@@ -44,50 +44,57 @@ enum ExploitSupportPolicy {
 
         switch major {
         case 17:
-            // iOS 17.0 – 17.7.x
             return minor <= 7
 
         case 18:
-            // iOS 18.0 – 18.7.1
             return minor < 7 || (minor == 7 && patch <= 1)
 
         case 26:
-            // iOS 26.0 – 26.6.2 (verified)
-            // iOS 26.7+ → experimental (server decide)
-            return true  // Let server decide via SupportedVersionsStore
+            // iOS 26+ → let server decide
+            return true
 
         case 27:
-            // iOS 27 → BadKernel
-            return true  // Let server decide
+            // iOS 27+ → let server decide
+            return true
 
         default:
             return false
         }
     }
 
-    // MARK: - Master check (server-first)
+    // MARK: - Master check (SYNC — pake data yang udah ada)
 
     /// Cek support dengan urutan:
-    /// 1. Local kernel exploit (paling cepat, gak butuh network)
-    /// 2. Server status (kalau ada di store)
-    /// 3. Fallback hardcoded (kalau server belum response)
+    /// 1. Server status (kalau ada di store) ← PRIORITAS UTAMA
+    /// 2. iOS 26/27 → return true (server yang decide)
+    /// 3. Local kernel exploit (iOS 17-18)
+    /// 4. Fallback hardcoded
     static func isSupported(major: Int, minor: Int, patch: Int, build: String) -> Bool {
-        // 1. Local check — kalau iya, langsung return true
-        if supportsKernelExploit(major: major, minor: minor, patch: patch) {
-            return true
-        }
-
-        // 2. Server check — kalau ada rule, pake itu
+        // ═══ PRIORITAS 1: Server status (kalau udah ke-fetch) ═══
         if let status = SupportedVersionsStore.status(major: major, minor: minor, patch: patch) {
             return status == "verified" || status == "experimental"
         }
 
-        // 3. Fallback hardcoded
+        // ═══ PRIORITAS 2: iOS 26 & 27 → let server decide ═══
+        // Kalau server belum fetch, anggap supported dulu
+        // Biar app lanjut, nanti server yang reject kalau emang gak support
+        if major == 26 || major == 27 {
+            return true
+        }
+
+        // ═══ PRIORITAS 3: Local kernel exploit (iOS 17-18) ═══
+        if supportsKernelExploit(major: major, minor: minor, patch: patch) {
+            return true
+        }
+
+        // ═══ PRIORITAS 4: Fallback hardcoded ═══
         return fallbackIsSupported(major: major, minor: minor, patch: patch, build: build)
     }
 
-    /// Cek support pake server response (async, lebih akurat)
-    /// Panggil ini SEBELUM cek `isSupported` biar server data udah ke-load.
+    // MARK: - Master check (ASYNC — fetch server dulu)
+
+    /// Cek support pake server response (async, paling akurat).
+    /// Panggil ini di launch session biar server data udah ke-load.
     static func isSupportedAsync(
         major: Int,
         minor: Int,
@@ -102,7 +109,7 @@ enum ExploitSupportPolicy {
             return status == "verified" || status == "experimental"
         }
 
-        // Fallback ke local check
+        // Kalau server gak punya rule buat versi ini, fallback
         return isSupported(major: major, minor: minor, patch: patch, build: build)
     }
 
