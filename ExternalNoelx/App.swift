@@ -37,7 +37,6 @@ struct ExternalNoelxApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                // ═══ FORCE UPDATE (highest priority) ═══
                 if remoteConfig.isForceUpdateRequired {
                     ForceUpdateView(
                         message: "A new version is required. Please update to continue.",
@@ -102,7 +101,6 @@ struct ExternalNoelxApp: App {
                 checkForUpdate()
             }
             .task {
-                // Fetch remote config saat app launch
                 await remoteConfig.fetch()
                 log("remote-config: min=\(remoteConfig.minAppVersion), forceUpdate=\(remoteConfig.isForceUpdateRequired)")
             }
@@ -115,7 +113,6 @@ struct ExternalNoelxApp: App {
 
                 appState.detectSupport()
 
-                // Refresh remote config saat foreground
                 Task {
                     await remoteConfig.fetch()
                 }
@@ -213,21 +210,21 @@ class AppState: ObservableObject {
               !exploitStatus.isFailed else { return }
         kernelExploitRunning = true
         exploitStatus = .notStarted
-        log("app: running kernel exploit on background...")
+
+        let major = AppInfo.versionTuple.major
+        let method = major >= 26 ? "BadKernel" : "kexploit"
+        log("app: running \(method) on background...")
+
         DispatchQueue.global(qos: .userInitiated).async {
-            let ok = KernelExploit.run()
+            let ok = ExploitRouter.run()
             DispatchQueue.main.async {
                 self.kernelExploitRunning = false
                 if ok {
-                    self.exploitStatus = .success(method: "kexploit")
-                    if KernelExploit.requiresSandboxEscape {
-                        log("app: kernel exploit success — sandbox access verified")
-                    } else {
-                        log("app: kernel exploit success — kernel access active")
-                    }
+                    self.exploitStatus = .success(method: method)
+                    log("app: \(method) success — access active")
                 } else {
-                    self.exploitStatus = .failed(method: "kexploit", code: -1)
-                    log("app: kernel exploit failed — relaunch the app before retrying")
+                    self.exploitStatus = .failed(method: method, code: -1)
+                    log("app: \(method) failed — relaunch before retrying")
                 }
             }
         }
