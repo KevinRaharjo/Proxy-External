@@ -1,27 +1,66 @@
-name: Build Unsigned IPA
+name: Build External Nixx Universal IPA
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-latest
+    name: Build iOS 17–27 IPA
+    runs-on: macos-14
+    timeout-minutes: 60
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Make script executable
-        run: chmod +x ./build_unsigned.sh ./build_esign_ready_ipa.sh
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
 
-      - name: Build
-        run: ./build_unsigned.sh
+      - name: Verify Xcode
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
 
-      - name: Verify eSign-ready
-        run: ./build_esign_ready_ipa.sh build/External-Nixx.ipa
+      - name: Clone BadKernel
+        run: |
+          git clone --depth 1 https://github.com/BashSQ/Bad-Kernel.git BadKernel || true
+          ls -la BadKernel/BadKernel/ || true
 
-      - name: Upload IPA Artifact
+      - name: Sync BadKernel into project
+        run: |
+          mkdir -p ExternalNoelx/BadKernel
+          cp BadKernel/BadKernel/*.h ExternalNoelx/BadKernel/ 2>/dev/null || true
+          cp BadKernel/BadKernel/*.m ExternalNoelx/BadKernel/ 2>/dev/null || true
+          echo "── Files in ExternalNoelx/BadKernel ──"
+          ls -la ExternalNoelx/BadKernel/ || true
+
+      - name: Make scripts executable
+        run: chmod +x build_universal.sh setup_badkernel.sh 2>/dev/null || true
+
+      - name: Build unsigned IPA
+        run: ./build_universal.sh
+
+      - name: Verify IPA exists
+        run: |
+          if [ ! -f build/External-Nixx-Universal.ipa ]; then
+            echo "❌ IPA missing!"
+            exit 1
+          fi
+          ls -la build/
+
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: External-Nixx-ipa
-          path: build/External-Nixx.ipa
+          name: External-Nixx-Universal-ipa
+          path: build/External-Nixx-Universal.ipa
           retention-days: 30
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build/
+          retention-days: 7
