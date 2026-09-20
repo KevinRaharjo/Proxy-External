@@ -59,6 +59,7 @@ actor SupportedVersionsService {
 
     private var lastFetch: Date?
     private let cacheTTL: TimeInterval = 300
+    private var loadTask: Task<[SupportedVersion], Error>?
 
     private init() {
         let config = URLSessionConfiguration.ephemeral
@@ -73,11 +74,44 @@ actor SupportedVersionsService {
         self.decoder = decoder
     }
 
+    /// Pastiin server data udah ke-load. Kalau belum, fetch sekarang.
+    /// Kalau udah, return langsung.
+    func ensureLoaded() async {
+        // Kalau udah ada data, skip
+        if !SupportedVersionsStore.versions.isEmpty {
+            return
+        }
+        // Kalau ada task in-flight, tungguin
+        if let task = loadTask {
+            _ = try? await task.value
+            return
+        }
+        // Fetch sekarang
+        _ = try? await fetch(force: false)
+    }
+
     func fetch(force: Bool = false) async throws -> [SupportedVersion] {
+        // Kalau udah ada cache & belum expired
         if !force, let last = lastFetch, Date().timeIntervalSince(last) < cacheTTL {
             return SupportedVersionsStore.versions
         }
 
+        // Kalau ada task in-flight, join aja
+        if let existing = loadTask {
+            return try await existing.value
+        }
+
+        let task = Task<[SupportedVersion], Error> { [weak self] in
+            guard let self else { return [] }
+            return try await self.performFetch()
+        }
+        loadTask = task
+        defer { loadTask = nil }
+
+        return try await task.value
+    }
+
+    private func performFetch() async throws -> [SupportedVersion] {
         var request = URLRequest(url: baseURL.appendingPathComponent("/api/v1/supported-versions"))
         request.httpMethod = "GET"
         request.setValue("NixxTime-iOS/1.0", forHTTPHeaderField: "User-Agent")
@@ -94,6 +128,11 @@ actor SupportedVersionsService {
         SupportedVersionsStore.replace(list)
         lastFetch = Date()
         return list
+    }
+
+    /// Force refresh dari server
+    func refresh() async throws -> [SupportedVersion] {
+        try await fetch(force: true)
     }
 }
 
