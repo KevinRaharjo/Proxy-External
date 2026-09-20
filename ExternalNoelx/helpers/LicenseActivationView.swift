@@ -24,10 +24,32 @@ struct LicenseActivationView: View {
         manager.isBusy
     }
 
+    /// Tombol ACTIVATE cuma butuh key & gak busy.
+    /// GAK butuh isDeviceSupported — biar user bisa trigger async check.
     private var canActivate: Bool {
-        isDeviceSupported &&
-        !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !isBusy
+        !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isBusy
+    }
+
+    /// Banner unsupported cuma muncul kalau:
+    /// - iOS < 26 (local policy pasti tau)
+    /// - atau server udah fetch & bilang gak support
+    private var shouldShowUnsupportedBanner: Bool {
+        // iOS 26/27 → banner baru muncul kalau server udah fetch & bilang gak support
+        if AppInfo.versionTuple.major >= 26 {
+            // Cek apakah server udah punya rule buat versi ini
+            let hasServerRule = SupportedVersionsStore.status(
+                major: AppInfo.versionTuple.major,
+                minor: AppInfo.versionTuple.minor,
+                patch: AppInfo.versionTuple.patch
+            ) != nil
+
+            // Kalau server BELUM fetch → jangan tampil banner
+            // Kalau server udah fetch → baru cek isDeviceSupported
+            return hasServerRule && !isDeviceSupported
+        }
+
+        // iOS < 26 → banner muncul kalau emang gak support
+        return !isDeviceSupported
     }
 
     var body: some View {
@@ -43,7 +65,7 @@ struct LicenseActivationView: View {
                         titleSection
 
                         // ═══ UNSUPPORTED BANNER ═══
-                        if !isDeviceSupported {
+                        if shouldShowUnsupportedBanner {
                             unsupportedBanner
                                 .padding(.horizontal, 22)
                                 .padding(.top, 20)
@@ -214,14 +236,12 @@ struct LicenseActivationView: View {
                         )
                     )
                     .id("license-field")
-                    .disabled(!isDeviceSupported)
 
                 Toggle("Remember on this device", isOn: $manager.rememberKey)
                     .font(.system(size: 11, weight: .heavy, design: .monospaced))
                     .tracking(0.8)
                     .foregroundStyle(BP.textDim)
                     .tint(BP.accent)
-                    .disabled(!isDeviceSupported)
 
                 Button(action: activate) {
                     HStack(spacing: 8) {
@@ -314,7 +334,6 @@ struct LicenseActivationView: View {
     // MARK: - Actions
 
     private func activate() {
-        guard isDeviceSupported else { return }
         guard !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         guard !isBusy else { return }
         keyFocused = false
