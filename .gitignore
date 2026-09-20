@@ -1,0 +1,26 @@
+
+# ═══════════════════════════════════════════════════════════
+# External Nixx — dual backend
+# ═══════════════════════════════════════════════════════════
+
+# BadKernel (cloned at build time)
+BadKernel/
+ExternalNoelx/BadKernel/*.h
+ExternalNoelx/BadKernel/*.m
+
+# Build output
+build/
+*.ipa
+*.xcarchive
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+project.xcworkspace/
+DerivedData/
