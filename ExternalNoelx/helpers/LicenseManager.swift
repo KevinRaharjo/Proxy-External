@@ -60,12 +60,27 @@ final class LicenseManager: ObservableObject {
         return nil
     }
 
-    // MARK: - Device Support Check
+    // MARK: - Device Support Check (SYNC)
 
-    /// Cek apakah device support kernel exploit
+    /// Cek device support pake data yang udah ada (sync, cepat).
+    /// Pake ini buat UI rendering. Buat logic penting, pake `isDeviceSupportedAsync()`.
     var isDeviceSupported: Bool {
         let v = AppInfo.versionTuple
         return ExploitSupportPolicy.isSupported(
+            major: v.major,
+            minor: v.minor,
+            patch: v.patch,
+            build: AppInfo.osBuild
+        )
+    }
+
+    // MARK: - Device Support Check (ASYNC, RECOMMENDED)
+
+    /// Cek device support pake server data (async, akurat).
+    /// Panggil ini di launch session biar server data udah ke-load.
+    func isDeviceSupportedAsync() async -> Bool {
+        let v = AppInfo.versionTuple
+        return await ExploitSupportPolicy.isSupportedAsync(
             major: v.major,
             minor: v.minor,
             patch: v.patch,
@@ -90,16 +105,29 @@ final class LicenseManager: ObservableObject {
         return false
     }
 
-    // MARK: - Launch
+    // MARK: - Launch (ASYNC, server-first)
 
     func beginLaunchSession() {
-        // ═══ CEK DEVICE SUPPORT DULU ═══
-        guard isDeviceSupported else {
-            state = .inactive
-            message = "iOS \(AppInfo.osVersion) is not supported. Please use iOS 17 or newer."
-            return
-        }
+        // ═══ CEK DEVICE SUPPORT DULU (server-first) ═══
+        Task {
+            // Fetch server dulu biar SupportedVersionsStore ke-populate
+            await SupportedVersionsService.shared.ensureLoaded()
 
+            let supported = await isDeviceSupportedAsync()
+            guard supported else {
+                await MainActor.run {
+                    self.state = .inactive
+                    self.message = "iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) is not supported. Please use a supported version."
+                }
+                return
+            }
+
+            // Sekarang lanjut verify license
+            await self.performLaunchVerification()
+        }
+    }
+
+    private func performLaunchVerification() async {
         guard let token = UserDefaults.standard.string(forKey: StorageKeys.sessionToken),
               UserDefaults.standard.string(forKey: StorageKeys.licenseKey) != nil else {
             state = .inactive
@@ -124,55 +152,45 @@ final class LicenseManager: ObservableObject {
         isVerifying = true
         message = "Verifying license…"
 
-        Task {
-            do {
-                let status = try await APIClient.shared.status()
+        do {
+            let status = try await APIClient.shared.status()
 
-                if status.maintenance {
-                    let msg = status.message ?? "Server is under maintenance. Please try again later."
-                    UserDefaults.standard.set(msg, forKey: StorageKeys.maintenanceMessage)
-                    await MainActor.run {
-                        self.isBusy = false
-                        self.isVerifying = false
-                        self.state = .maintenance(message: msg)
-                        self.message = msg
-                    }
-                    return
-                }
-
-                let response = try await APIClient.shared.verify(token: token, deviceID: deviceID)
-
-                await MainActor.run {
-                    self.isBusy = false
-                    self.isVerifying = false
-                    if response.success {
-                        self.state = .active
-                        self.expirationDate = response.expiresAt
-                        self.message = "License active"
-                        UserDefaults.standard.set(Date(), forKey: StorageKeys.lastVerified)
-                        UserDefaults.standard.set(Date(), forKey: StorageKeys.lastForegroundVerify)
-                        if let expiry = response.expiresAt {
-                            UserDefaults.standard.set(expiry, forKey: StorageKeys.cachedExpiry)
-                        }
-                    } else {
-                        self.clearSession()
-                        self.state = .inactive
-                        self.message = response.error ?? "Session expired. Please activate again."
-                    }
-                }
-            } catch let error as APIClientError {
-                await MainActor.run {
-                    self.isBusy = false
-                    self.isVerifying = false
-                    self.handleMaintenanceOrOffline(error: error, wasActive: wasActive)
-                }
-            } catch {
-                await MainActor.run {
-                    self.isBusy = false
-                    self.isVerifying = false
-                    self.handleMaintenanceOrOffline(error: APIClientError.networkUnreachable, wasActive: wasActive)
-                }
+            if status.maintenance {
+                let msg = status.message ?? "Server is under maintenance. Please try again later."
+                UserDefaults.standard.set(msg, forKey: StorageKeys.maintenanceMessage)
+                self.isBusy = false
+                self.isVerifying = false
+                self.state = .maintenance(message: msg)
+                self.message = msg
+                return
             }
+
+            let response = try await APIClient.shared.verify(token: token, deviceID: deviceID)
+
+            self.isBusy = false
+            self.isVerifying = false
+            if response.success {
+                self.state = .active
+                self.expirationDate = response.expiresAt
+                self.message = "License active"
+                UserDefaults.standard.set(Date(), forKey: StorageKeys.lastVerified)
+                UserDefaults.standard.set(Date(), forKey: StorageKeys.lastForegroundVerify)
+                if let expiry = response.expiresAt {
+                    UserDefaults.standard.set(expiry, forKey: StorageKeys.cachedExpiry)
+                }
+            } else {
+                self.clearSession()
+                self.state = .inactive
+                self.message = response.error ?? "Session expired. Please activate again."
+            }
+        } catch let error as APIClientError {
+            self.isBusy = false
+            self.isVerifying = false
+            self.handleMaintenanceOrOffline(error: error, wasActive: wasActive)
+        } catch {
+            self.isBusy = false
+            self.isVerifying = false
+            self.handleMaintenanceOrOffline(error: APIClientError.networkUnreachable, wasActive: wasActive)
         }
     }
 
@@ -182,13 +200,24 @@ final class LicenseManager: ObservableObject {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isBusy else { return }
 
-        // ═══ CEK DEVICE SUPPORT DULU ═══
-        guard isDeviceSupported else {
-            message = "iOS \(AppInfo.osVersion) is not supported. Please use iOS 17 or newer."
-            state = .inactive
-            return
-        }
+        // ═══ CEK DEVICE SUPPORT (server-first) ═══
+        Task {
+            await SupportedVersionsService.shared.ensureLoaded()
 
+            let supported = await isDeviceSupportedAsync()
+            guard supported else {
+                await MainActor.run {
+                    self.message = "iOS \(AppInfo.osVersion) (\(AppInfo.osBuild)) is not supported."
+                    self.state = .inactive
+                }
+                return
+            }
+
+            await self.performActivation(key: trimmed)
+        }
+    }
+
+    private func performActivation(key: String) async {
         if let last = lastAttemptAt, Date().timeIntervalSince(last) < minimumAttemptInterval {
             message = "Please wait a moment before trying again"
             return
@@ -205,49 +234,41 @@ final class LicenseManager: ObservableObject {
             osVersion: UIDevice.current.systemVersion
         )
 
-        Task {
-            do {
-                let response = try await APIClient.shared.activate(key: trimmed, device: device)
+        do {
+            let response = try await APIClient.shared.activate(key: key, device: device)
 
-                await MainActor.run {
-                    self.isBusy = false
-                    if response.success, let token = response.token {
-                        self.state = .active
-                        self.expirationDate = response.expiresAt
-                        self.message = "Activated successfully"
+            self.isBusy = false
+            if response.success, let token = response.token {
+                self.state = .active
+                self.expirationDate = response.expiresAt
+                self.message = "Activated successfully"
 
-                        if self.rememberKey {
-                            UserDefaults.standard.set(trimmed, forKey: StorageKeys.licenseKey)
-                            UserDefaults.standard.set(token, forKey: StorageKeys.sessionToken)
-                            UserDefaults.standard.set(Date(), forKey: StorageKeys.lastVerified)
-                            UserDefaults.standard.set(Date(), forKey: StorageKeys.lastForegroundVerify)
-                            if let expiry = response.expiresAt {
-                                UserDefaults.standard.set(expiry, forKey: StorageKeys.cachedExpiry)
-                            }
-                        }
-                    } else {
-                        self.state = .inactive
-                        self.message = response.error ?? "Invalid key"
+                if self.rememberKey {
+                    UserDefaults.standard.set(key, forKey: StorageKeys.licenseKey)
+                    UserDefaults.standard.set(token, forKey: StorageKeys.sessionToken)
+                    UserDefaults.standard.set(Date(), forKey: StorageKeys.lastVerified)
+                    UserDefaults.standard.set(Date(), forKey: StorageKeys.lastForegroundVerify)
+                    if let expiry = response.expiresAt {
+                        UserDefaults.standard.set(expiry, forKey: StorageKeys.cachedExpiry)
                     }
                 }
-            } catch let error as APIClientError {
-                await MainActor.run {
-                    self.isBusy = false
-                    if case .maintenance(let msg) = error {
-                        self.state = .maintenance(message: msg)
-                        self.message = msg
-                    } else {
-                        self.state = .inactive
-                        self.message = error.localizedDescription
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    self.isBusy = false
-                    self.state = .inactive
-                    self.message = "Unknown error"
-                }
+            } else {
+                self.state = .inactive
+                self.message = response.error ?? "Invalid key"
             }
+        } catch let error as APIClientError {
+            self.isBusy = false
+            if case .maintenance(let msg) = error {
+                self.state = .maintenance(message: msg)
+                self.message = msg
+            } else {
+                self.state = .inactive
+                self.message = error.localizedDescription
+            }
+        } catch {
+            self.isBusy = false
+            self.state = .inactive
+            self.message = "Unknown error"
         }
     }
 
@@ -270,12 +291,10 @@ final class LicenseManager: ObservableObject {
             } catch {
                 // Ignore offline error
             }
-            await MainActor.run {
-                self.clearSession()
-                self.isBusy = false
-                self.state = .inactive
-                self.message = "Deactivated from this device"
-            }
+            self.clearSession()
+            self.isBusy = false
+            self.state = .inactive
+            self.message = "Deactivated from this device"
         }
     }
 
