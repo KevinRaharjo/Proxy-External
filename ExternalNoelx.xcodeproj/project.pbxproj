@@ -83,6 +83,18 @@
 		3105U206 /* InfoTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105U207 /* InfoTabView.swift */; };
 		3105W001 /* SupportedVersionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105W002 /* SupportedVersionsService.swift */; };
 		3105WX01 /* RemoteConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105WX02 /* RemoteConfig.swift */; };
+
+		/* ─── DualBackend ─── */
+		3105X200 /* BadKernelBridge.h in Headers */ = {isa = PBXBuildFile; fileRef = 3105X100; };
+		3105X201 /* KRWBackend.h in Headers */ = {isa = PBXBuildFile; fileRef = 3105X101; };
+		3105X202 /* DualBackendConfig.h in Headers */ = {isa = PBXBuildFile; fileRef = 3105X102; };
+		3105X203 /* KRWBackend.m in Sources */ = {isa = PBXBuildFile; fileRef = 3105X103; };
+		3105X204 /* BadKernelBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105X104; };
+		3105X205 /* ExploitRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105X105; };
+
+		/* ─── BadKernel ─── */
+		3105Y200 /* BadKernel.h in Headers */ = {isa = PBXBuildFile; fileRef = 3105Y100; };
+		3105Y201 /* BadKernel.m in Sources */ = {isa = PBXBuildFile; fileRef = 3105Y101; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -182,6 +194,18 @@
 		3105U207 /* InfoTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoTabView.swift; sourceTree = "<group>"; };
 		3105W002 /* SupportedVersionsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportedVersionsService.swift; sourceTree = "<group>"; };
 		3105WX02 /* RemoteConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteConfig.swift; sourceTree = "<group>"; };
+
+		/* ─── DualBackend ─── */
+		3105X100 /* BadKernelBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BadKernelBridge.h; sourceTree = "<group>"; };
+		3105X101 /* KRWBackend.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = KRWBackend.h; sourceTree = "<group>"; };
+		3105X102 /* DualBackendConfig.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DualBackendConfig.h; sourceTree = "<group>"; };
+		3105X103 /* KRWBackend.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = KRWBackend.m; sourceTree = "<group>"; };
+		3105X104 /* BadKernelBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadKernelBridge.swift; sourceTree = "<group>"; };
+		3105X105 /* ExploitRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploitRouter.swift; sourceTree = "<group>"; };
+
+		/* ─── BadKernel ─── */
+		3105Y100 /* BadKernel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BadKernel.h; sourceTree = "<group>"; };
+		3105Y101 /* BadKernel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BadKernel.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -215,6 +239,8 @@
 				3105A404 /* views */,
 				3105A405 /* helpers */,
 				3105A406 /* kexploit */,
+				3105X110 /* DualBackend */,
+				3105Y110 /* BadKernel */,
 				3105A120 /* Localizable.strings */,
 				3105A031 /* Assets.xcassets */,
 				3105P800 /* Patches */,
@@ -342,6 +368,28 @@
 			path = kexploit;
 			sourceTree = "<group>";
 		};
+		3105X110 /* DualBackend */ = {
+			isa = PBXGroup;
+			children = (
+				3105X100 /* BadKernelBridge.h */,
+				3105X104 /* BadKernelBridge.swift */,
+				3105X101 /* KRWBackend.h */,
+				3105X103 /* KRWBackend.m */,
+				3105X105 /* ExploitRouter.swift */,
+				3105X102 /* DualBackendConfig.h */,
+			);
+			path = DualBackend;
+			sourceTree = "<group>";
+		};
+		3105Y110 /* BadKernel */ = {
+			isa = PBXGroup;
+			children = (
+				3105Y100 /* BadKernel.h */,
+				3105Y101 /* BadKernel.m */,
+			);
+			path = BadKernel;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -352,6 +400,7 @@
 				3105A700 /* Sources */,
 				3105A300 /* Frameworks */,
 				3105A800 /* Resources */,
+				3105X900 /* Run Script: setup BadKernel */,
 			);
 			buildRules = (
 			);
@@ -403,6 +452,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		3105X900 /* Run Script: setup BadKernel */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Run Script: setup BadKernel";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Clone BadKernel at build time if needed\nif [ ! -f \"${SRCROOT}/ExternalNoelx/BadKernel/BadKernel.h\" ]; then\n  bash \"${SRCROOT}/setup_badkernel.sh\" || true\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		3105A700 /* Sources */ = {
@@ -483,6 +554,10 @@
 				3105U206,
 				3105W001,
 				3105WX01,
+				3105X203,
+				3105X204,
+				3105X205,
+				3105Y201,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -514,6 +589,10 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/ExternalNoelx/BadKernel",
+				);
 				INFOPLIST_FILE = ExternalNoelx/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "External Nixx";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -548,6 +627,10 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/ExternalNoelx/BadKernel",
+				);
 				INFOPLIST_FILE = ExternalNoelx/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "External Nixx";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -574,7 +657,7 @@
 		3105AA01 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
+				ALWAYS_SEARCH_USER_PATHS = YES;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -636,7 +719,7 @@
 		3105AA02 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
+				ALWAYS_SEARCH_USER_PATHS = YES;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
