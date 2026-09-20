@@ -96,7 +96,16 @@ struct ExternalNoelxApp: App {
                 )
             }
             .onAppear {
-                licenseManager.beginLaunchSession()
+                // ═══ PRE-FETCH SERVER DATA SEBELUM LICENSE CHECK ═══
+                Task {
+                    // Fetch supported versions dari server DULU
+                    // biar `isDeviceSupported` udah akurat
+                    _ = try? await SupportedVersionsService.shared.fetch(force: false)
+
+                    // Baru mulai launch session
+                    licenseManager.beginLaunchSession()
+                }
+
                 appState.detectSupport()
                 checkForUpdate()
             }
