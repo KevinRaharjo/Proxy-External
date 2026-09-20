@@ -591,7 +591,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(SRCROOT)/ExternalNoelx",
 					"$(SRCROOT)/ExternalNoelx/BadKernel",
+					"$(SRCROOT)/ExternalNoelx/DualBackend",
 				);
 				INFOPLIST_FILE = ExternalNoelx/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "External Nixx";
@@ -629,7 +631,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(SRCROOT)/ExternalNoelx",
 					"$(SRCROOT)/ExternalNoelx/BadKernel",
+					"$(SRCROOT)/ExternalNoelx/DualBackend",
 				);
 				INFOPLIST_FILE = ExternalNoelx/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "External Nixx";
