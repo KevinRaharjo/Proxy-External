@@ -84,7 +84,7 @@
 		3105W001 /* SupportedVersionsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105W002 /* SupportedVersionsService.swift */; };
 		3105WX01 /* RemoteConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105WX02 /* RemoteConfig.swift */; };
 
-		/* ─── DualBackend ─── */
+		/* ─── DualBackend (NEW) ─── */
 		3105X200 /* BadKernelBridge.h in Headers */ = {isa = PBXBuildFile; fileRef = 3105X100; };
 		3105X201 /* KRWBackend.h in Headers */ = {isa = PBXBuildFile; fileRef = 3105X101; };
 		3105X202 /* DualBackendConfig.h in Headers */ = {isa = PBXBuildFile; fileRef = 3105X102; };
@@ -92,7 +92,7 @@
 		3105X204 /* BadKernelBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105X104; };
 		3105X205 /* ExploitRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3105X105; };
 
-		/* ─── BadKernel ─── */
+		/* ─── BadKernel (NEW) ─── */
 		3105Y200 /* BadKernel.h in Headers */ = {isa = PBXBuildFile; fileRef = 3105Y100; };
 		3105Y201 /* BadKernel.m in Sources */ = {isa = PBXBuildFile; fileRef = 3105Y101; };
 /* End PBXBuildFile section */
@@ -207,6 +207,20 @@
 		3105Y100 /* BadKernel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BadKernel.h; sourceTree = "<group>"; };
 		3105Y101 /* BadKernel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BadKernel.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXHeadersBuildPhase section */
+		3105X990 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3105X200 /* BadKernelBridge.h in Headers */,
+				3105X201 /* KRWBackend.h in Headers */,
+				3105X202 /* DualBackendConfig.h in Headers */,
+				3105Y200 /* BadKernel.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		3105A300 /* Frameworks */ = {
@@ -397,6 +411,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3105A600;
 			buildPhases = (
+				3105X990 /* Headers */,
 				3105A700 /* Sources */,
 				3105A300 /* Frameworks */,
 				3105A800 /* Resources */,
