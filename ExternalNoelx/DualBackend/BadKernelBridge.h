@@ -13,25 +13,27 @@
 NS_ASSUME_NONNULL_BEGIN
 
 // ═══════════════════════════════════════════════════════════════
-// MARK: - BadKernel C API
+// MARK: - BadKernel C API (mirrors BadKernel.h)
 // ═══════════════════════════════════════════════════════════════
 
-void BadKernelInit(void);
-void BadKernelDeinit(void);
-bool BadKernelIsReady(void);
+typedef void (*bk_log_func_t)(const char *message);
+
+int      BadKernelInit(void);
+int      BadKernelInitWithLog(bk_log_func_t log_func);
+int      BadKernelDeinit(void);
+bool     BadKernelIsReady(void);
 uint64_t BadKernelGetBase(void);
 uint64_t BadKernelGetSlide(void);
 
-bool BadKernelKRead(uint64_t addr, void *out, size_t len);
+int BadKernelKRead(uint64_t kaddr, void *out, size_t len);
+int BadKernelKWrite(uint64_t kaddr, const void *in, size_t len);
 uint32_t BadKernelKRead32(uint64_t addr);
 uint64_t BadKernelKRead64(uint64_t addr);
-
-bool BadKernelKWrite(uint64_t addr, const void *in, size_t len);
-bool BadKernelKWrite32(uint64_t addr, uint32_t val);
-bool BadKernelKWrite64(uint64_t addr, uint64_t val);
+int BadKernelKWrite32(uint64_t kaddr, uint32_t val);
+int BadKernelKWrite64(uint64_t kaddr, uint64_t val);
 
 int64_t BadKernelSandboxEscape(const char *path);
-void BadKernelSandboxRelease(int64_t handle);
+void    BadKernelSandboxRelease(int64_t handle);
 
 // ═══════════════════════════════════════════════════════════════
 // MARK: - KRW backend routing
