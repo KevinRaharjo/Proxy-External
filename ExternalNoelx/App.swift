@@ -98,12 +98,16 @@ struct ExternalNoelxApp: App {
             .onAppear {
                 // ═══ PRE-FETCH SERVER DATA SEBELUM LICENSE CHECK ═══
                 Task {
-                    // Fetch supported versions dari server DULU
-                    // biar `isDeviceSupported` udah akurat
+                    // 1. Fetch supported versions dari server DULU
+                    //    biar `isDeviceSupported` udah akurat
+                    log("app: pre-fetching supported versions from server…")
                     _ = try? await SupportedVersionsService.shared.fetch(force: false)
+                    log("app: supported versions fetched — \(SupportedVersionsStore.versions.count) entries")
 
-                    // Baru mulai launch session
-                    licenseManager.beginLaunchSession()
+                    // 2. Baru mulai launch session
+                    await MainActor.run {
+                        licenseManager.beginLaunchSession()
+                    }
                 }
 
                 appState.detectSupport()
@@ -124,6 +128,8 @@ struct ExternalNoelxApp: App {
 
                 Task {
                     await remoteConfig.fetch()
+                    // Refresh supported versions juga
+                    _ = try? await SupportedVersionsService.shared.fetch(force: false)
                 }
             }
             .onOpenURL { url in
