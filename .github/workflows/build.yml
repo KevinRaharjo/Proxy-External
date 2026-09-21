@@ -7,12 +7,18 @@ jobs:
   build:
     name: Build iOS 17–27 IPA
     runs-on: macos-14
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
-      - name: Checkout
+      # ═══════════════════════════════════════════════════════
+      # 1. Checkout
+      # ═══════════════════════════════════════════════════════
+      - name: Checkout repo
         uses: actions/checkout@v4
 
+      # ═══════════════════════════════════════════════════════
+      # 2. Setup Xcode
+      # ═══════════════════════════════════════════════════════
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -23,44 +29,242 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
-      - name: Clone BadKernel
+      # ═══════════════════════════════════════════════════════
+      # 3. Verify struktur repo
+      # ═══════════════════════════════════════════════════════
+      - name: Verify repo structure
         run: |
-          git clone --depth 1 https://github.com/BashSQ/Bad-Kernel.git BadKernel || true
-          ls -la BadKernel/BadKernel/ || true
+          echo "═══ Repo root ═══"
+          ls -la
+          echo ""
+          echo "═══ ExternalNoelx folder ═══"
+          ls -la ExternalNoelx/ 2>/dev/null || echo "NOT FOUND"
+          echo ""
+          echo "═══ BadKernel files (existing) ═══"
+          ls -la ExternalNoelx/BadKernel.m 2>/dev/null || echo "BadKernel.m NOT FOUND"
+          ls -la ExternalNoelx/BadKernel.h 2>/dev/null || echo "BadKernel.h NOT FOUND"
+          echo ""
+          echo "═══ Build scripts ═══"
+          ls -la *.sh 2>/dev/null || echo "No .sh files"
 
-      - name: Sync BadKernel into project
+      # ═══════════════════════════════════════════════════════
+      # 4. Setup BadKernel (clone + integrate)
+      # ═══════════════════════════════════════════════════════
+      - name: Setup BadKernel
         run: |
+          echo "═══ Cloning BashSQ/Bad-Kernel ═══"
+          git clone --depth 1 https://github.com/BashSQ/Bad-Kernel.git /tmp/Bad-Kernel
+          
+          echo ""
+          echo "═══ Repo structure ═══"
+          echo "BadKernel/ folder:"
+          ls -la /tmp/Bad-Kernel/BadKernel/ || echo "NOT FOUND"
+          echo ""
+          echo "headers/ folder:"
+          ls -la /tmp/Bad-Kernel/headers/ || echo "NOT FOUND"
+          
+          echo ""
+          echo "═══ Preparing destination ═══"
           mkdir -p ExternalNoelx/BadKernel
-          cp BadKernel/BadKernel/*.h ExternalNoelx/BadKernel/ 2>/dev/null || true
-          cp BadKernel/BadKernel/*.m ExternalNoelx/BadKernel/ 2>/dev/null || true
-          echo "── Files in ExternalNoelx/BadKernel ──"
+          mkdir -p ExternalNoelx/BadKernel/include
+          
+          echo ""
+          echo "═══ Copying source (.m, .c) from BadKernel/ ═══"
+          find /tmp/Bad-Kernel/BadKernel -maxdepth 1 -type f \( -name "*.m" -o -name "*.c" \) -exec cp {} ExternalNoelx/BadKernel/ \;
           ls -la ExternalNoelx/BadKernel/ || true
-
-      - name: Make scripts executable
-        run: chmod +x build_universal.sh setup_badkernel.sh 2>/dev/null || true
-
-      - name: Build unsigned IPA
-        run: ./build_universal.sh
-
-      - name: Verify IPA exists
-        run: |
-          if [ ! -f build/External-Nixx-Universal.ipa ]; then
-            echo "❌ IPA missing!"
+          
+          echo ""
+          echo "═══ Copying headers (.h) from BadKernel/ ═══"
+          find /tmp/Bad-Kernel/BadKernel -maxdepth 1 -type f -name "*.h" -exec cp {} ExternalNoelx/BadKernel/ \;
+          find /tmp/Bad-Kernel/BadKernel -maxdepth 1 -type f -name "*.h" -exec cp {} ExternalNoelx/BadKernel/include/ \;
+          
+          echo ""
+          echo "═══ Copying headers (.h) from headers/ ═══"
+          find /tmp/Bad-Kernel/headers -maxdepth 1 -type f -name "*.h" -exec cp {} ExternalNoelx/BadKernel/ \;
+          find /tmp/Bad-Kernel/headers -maxdepth 1 -type f -name "*.h" -exec cp {} ExternalNoelx/BadKernel/include/ \;
+          
+          echo ""
+          echo "═══ Deep search BadKernel.h & BadKernel.m ═══"
+          find /tmp/Bad-Kernel -name "BadKernel.h" -exec cp {} ExternalNoelx/BadKernel/ \; 2>/dev/null || true
+          find /tmp/Bad-Kernel -name "BadKernel.h" -exec cp {} ExternalNoelx/BadKernel/include/ \; 2>/dev/null || true
+          find /tmp/Bad-Kernel -name "BadKernel.m" -exec cp {} ExternalNoelx/BadKernel/ \; 2>/dev/null || true
+          
+          echo ""
+          echo "═══ Final files in ExternalNoelx/BadKernel/ ═══"
+          ls -la ExternalNoelx/BadKernel/ || true
+          
+          # ═══ REPLACE STUB dengan real implementation ═══
+          echo ""
+          echo "═══ Replacing stub files ═══"
+          
+          REAL_M="ExternalNoelx/BadKernel/BadKernel.m"
+          STUB_M="ExternalNoelx/BadKernel.m"
+          REAL_H="ExternalNoelx/BadKernel/BadKernel.h"
+          STUB_H="ExternalNoelx/BadKernel.h"
+          
+          if [ -f "$REAL_M" ]; then
+            if [ -f "$STUB_M" ]; then
+              cp "$STUB_M" "$STUB_M.stub.bak"
+              echo "Stub backup → BadKernel.m.stub.bak"
+            fi
+            cp "$REAL_M" "$STUB_M"
+            echo "✅ BadKernel.m → replaced with real implementation"
+          else
+            echo "❌ BadKernel.m NOT found in cloned repo!"
+            echo "Available .m files:"
+            find /tmp/Bad-Kernel -name "*.m"
             exit 1
           fi
-          ls -la build/
+          
+          if [ -f "$REAL_H" ]; then
+            if [ -f "$STUB_H" ]; then
+              cp "$STUB_H" "$STUB_H.stub.bak"
+            fi
+            cp "$REAL_H" "$STUB_H"
+            echo "✅ BadKernel.h → replaced"
+          else
+            echo "⚠️  BadKernel.h NOT found in cloned repo, using existing stub"
+          fi
+          
+          # Copy header ke include/
+          if [ -f "$STUB_H" ]; then
+            cp "$STUB_H" "ExternalNoelx/BadKernel/include/BadKernel.h"
+          fi
+          
+          # Bikin BADKERNEL_REAL define header
+          cat > ExternalNoelx/BadKernel/BadKernel-Real.h << 'EOF'
+          // Auto-generated by workflow
+          #ifndef BADKERNEL_REAL
+          #define BADKERNEL_REAL 1
+          #endif
+          EOF
+          echo "✅ BadKernel-Real.h created"
 
+      # ═══════════════════════════════════════════════════════
+      # 5. Verify BadKernel files
+      # ═══════════════════════════════════════════════════════
+      - name: Verify BadKernel integration
+        run: |
+          echo "═══ Checking BadKernel.m ═══"
+          if [ -f ExternalNoelx/BadKernel.m ]; then
+            echo "✅ BadKernel.m exists ($(wc -l < ExternalNoelx/BadKernel.m) lines)"
+            head -20 ExternalNoelx/BadKernel.m
+          else
+            echo "❌ BadKernel.m NOT FOUND"
+            exit 1
+          fi
+          
+          echo ""
+          echo "═══ Checking BadKernel.h ═══"
+          if [ -f ExternalNoelx/BadKernel.h ]; then
+            echo "✅ BadKernel.h exists ($(wc -l < ExternalNoelx/BadKernel.h) lines)"
+            head -20 ExternalNoelx/BadKernel.h
+          else
+            echo "❌ BadKernel.h NOT FOUND"
+            exit 1
+          fi
+          
+          echo ""
+          echo "═══ Checking BadKernel/ folder ═══"
+          ls -la ExternalNoelx/BadKernel/
+
+      # ═══════════════════════════════════════════════════════
+      # 6. Make scripts executable
+      # ═══════════════════════════════════════════════════════
+      - name: Make scripts executable
+        run: |
+          chmod +x build_universal.sh 2>/dev/null || true
+          chmod +x setup_badkernel.sh 2>/dev/null || true
+          chmod +x build_unsigned.sh 2>/dev/null || true
+          chmod +x build_esign_ready_ipa.sh 2>/dev/null || true
+          echo "Script permissions:"
+          ls -la *.sh 2>/dev/null || true
+
+      # ═══════════════════════════════════════════════════════
+      # 7. Build IPA
+      # ═══════════════════════════════════════════════════════
+      - name: Build universal IPA
+        run: |
+          if [ -f ./build_universal.sh ]; then
+            echo "▶ Running build_universal.sh"
+            ./build_universal.sh
+          elif [ -f ./build_unsigned.sh ]; then
+            echo "▶ Running build_unsigned.sh"
+            ./build_unsigned.sh
+          else
+            echo "❌ No build script found"
+            exit 1
+          fi
+
+      # ═══════════════════════════════════════════════════════
+      # 8. Verify IPA
+      # ═══════════════════════════════════════════════════════
+      - name: Verify IPA exists
+        run: |
+          echo "═══ Build folder ═══"
+          ls -la build/ || true
+          
+          if [ ! -f build/External-Nixx-Universal.ipa ]; then
+            echo "❌ IPA missing!"
+            echo "Looking for any .ipa:"
+            find build -name "*.ipa" 2>/dev/null || true
+            exit 1
+          fi
+          
+          echo "✅ IPA created: build/External-Nixx-Universal.ipa"
+          ls -la build/External-Nixx-Universal.ipa
+          du -h build/External-Nixx-Universal.ipa
+
+      # ═══════════════════════════════════════════════════════
+      # 9. Verify eSign-ready
+      # ═══════════════════════════════════════════════════════
+      - name: Verify eSign-ready IPA
+        if: success()
+        run: |
+          if [ -f ./build_esign_ready_ipa.sh ]; then
+            ./build_esign_ready_ipa.sh build/External-Nixx-Universal.ipa || true
+          fi
+
+      # ═══════════════════════════════════════════════════════
+      # 10. Upload IPA
+      # ═══════════════════════════════════════════════════════
       - name: Upload IPA artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: External-Nixx-Universal-ipa
           path: build/External-Nixx-Universal.ipa
           retention-days: 30
 
+      # ═══════════════════════════════════════════════════════
+      # 11. Upload build log on failure
+      # ═══════════════════════════════════════════════════════
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
-          path: build/
+          path: |
+            build/
           retention-days: 7
+          if-no-files-found: ignore
+
+      # ═══════════════════════════════════════════════════════
+      # 12. Show cloned BadKernel for debugging
+      # ═══════════════════════════════════════════════════════
+      - name: Show BadKernel source (debug)
+        if: always()
+        run: |
+          echo "═══ Cloned BadKernel source ═══"
+          echo "BadKernel/ folder:"
+          ls -la /tmp/Bad-Kernel/BadKernel/ 2>/dev/null || true
+          echo ""
+          echo "headers/ folder:"
+          ls -la /tmp/Bad-Kernel/headers/ 2>/dev/null || true
+          echo ""
+          echo "═══ Final ExternalNoelx/BadKernel/ ═══"
+          ls -la ExternalNoelx/BadKernel/ 2>/dev/null || true
+          echo ""
+          echo "═══ Final ExternalNoelx/BadKernel.m & .h ═══"
+          ls -la ExternalNoelx/BadKernel.m 2>/dev/null || true
+          ls -la ExternalNoelx/BadKernel.h 2>/dev/null || true
