@@ -95,6 +95,9 @@
 		/* ─── BadKernel (NEW) ─── */
 		3105Y200 /* BadKernel.h in Headers */ = {isa = PBXBuildFile; fileRef = 3105Y100; };
 		3105Y201 /* BadKernel.m in Sources */ = {isa = PBXBuildFile; fileRef = 3105Y101; };
+
+		/* ─── Frameworks (NEW) ─── */
+		3105Z200 /* IOSurface.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3105Z100 /* IOSurface.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -206,6 +209,9 @@
 		/* ─── BadKernel ─── */
 		3105Y100 /* BadKernel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BadKernel.h; sourceTree = "<group>"; };
 		3105Y101 /* BadKernel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BadKernel.m; sourceTree = "<group>"; };
+
+		/* ─── Frameworks ─── */
+		3105Z100 /* IOSurface.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOSurface.framework; path = System/Library/Frameworks/IOSurface.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXHeadersBuildPhase section */
@@ -227,6 +233,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3105Z200 /* IOSurface.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -237,6 +244,7 @@
 			isa = PBXGroup;
 			children = (
 				3105A401 /* ExternalNoelx */,
+				3105Z110 /* Frameworks */,
 				3105A402 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -404,6 +412,14 @@
 			path = BadKernel;
 			sourceTree = "<group>";
 		};
+		3105Z110 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				3105Z100 /* IOSurface.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -415,7 +431,6 @@
 				3105A700 /* Sources */,
 				3105A300 /* Frameworks */,
 				3105A800 /* Resources */,
-				3105X900 /* Run Script: setup BadKernel */,
 			);
 			buildRules = (
 			);
@@ -467,28 +482,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		3105X900 /* Run Script: setup BadKernel */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Run Script: setup BadKernel";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# Clone BadKernel at build time if needed\nif [ ! -f \"${SRCROOT}/ExternalNoelx/BadKernel/BadKernel.h\" ]; then\n  bash \"${SRCROOT}/setup_badkernel.sh\" || true\nfi\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		3105A700 /* Sources */ = {
@@ -608,6 +601,7 @@
 					"$(inherited)",
 					"$(SRCROOT)/ExternalNoelx",
 					"$(SRCROOT)/ExternalNoelx/BadKernel",
+					"$(SRCROOT)/ExternalNoelx/BadKernel/include",
 					"$(SRCROOT)/ExternalNoelx/DualBackend",
 				);
 				INFOPLIST_FILE = ExternalNoelx/Info.plist;
@@ -623,7 +617,11 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.1.1;
-				OTHER_LDFLAGS = "-lz";
+				OTHER_LDFLAGS = (
+					"-lz",
+					"-lresolv",
+					"-ldl",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.mobile.MobileHouseArrest";
 				PRODUCT_NAME = NixxTime;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -648,6 +646,7 @@
 					"$(inherited)",
 					"$(SRCROOT)/ExternalNoelx",
 					"$(SRCROOT)/ExternalNoelx/BadKernel",
+					"$(SRCROOT)/ExternalNoelx/BadKernel/include",
 					"$(SRCROOT)/ExternalNoelx/DualBackend",
 				);
 				INFOPLIST_FILE = ExternalNoelx/Info.plist;
@@ -663,7 +662,11 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.1.1;
-				OTHER_LDFLAGS = "-lz";
+				OTHER_LDFLAGS = (
+					"-lz",
+					"-lresolv",
+					"-ldl",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.mobile.MobileHouseArrest";
 				PRODUCT_NAME = NixxTime;
 				SWIFT_EMIT_LOC_STRINGS = YES;
